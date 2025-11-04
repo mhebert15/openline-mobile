@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
@@ -6,36 +6,36 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { mockOfficesService } from "@/lib/mock/services";
 import type { MedicalOffice } from "@/lib/types/database.types";
 import { MapPinIcon, PhoneIcon, ChevronRightIcon } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { useDataCache } from "@/lib/contexts/DataCacheContext";
+import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
-export default function LocationsScreen() {
-  const [locations, setLocations] = useState<MedicalOffice[]>([]);
-  const [loading, setLoading] = useState(true);
+function LocationsScreen() {
+  const { cache, prefetchTabData, isLoading } = useDataCache();
   const router = useRouter();
+
+  // Get data from cache
+  const locations = (cache.locations.offices.data as MedicalOffice[]) || [];
+
+  // Only show loader if cache is empty AND currently loading
+  const loading = isLoading("locations") && locations.length === 0;
+
+  // Background refresh if cache is empty
+  useEffect(() => {
+    if (!cache.locations.offices.data) {
+      prefetchTabData("locations").catch((error) => {
+        console.error("Error loading locations:", error);
+      });
+    }
+  }, [cache.locations.offices.data, prefetchTabData]);
 
   const handleLocationPress = (locationId: string) => {
     router.push({
       pathname: "/(tabs)/locations/location-detail",
       params: { id: locationId },
     });
-  };
-
-  useEffect(() => {
-    loadLocations();
-  }, []);
-
-  const loadLocations = async () => {
-    try {
-      const offices = await mockOfficesService.getAllOffices();
-      setLocations(offices);
-    } catch (error) {
-      console.error("Error loading locations:", error);
-    } finally {
-      setLoading(false);
-    }
   };
 
   if (loading) {
@@ -89,5 +89,13 @@ export default function LocationsScreen() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+export default function LocationsScreenWrapper() {
+  return (
+    <AnimatedTabScreen>
+      <LocationsScreen />
+    </AnimatedTabScreen>
   );
 }

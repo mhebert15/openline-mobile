@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,52 +7,67 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-} from 'react-native';
-import { Calendar } from 'react-native-calendars';
-import { mockOfficesService, mockMeetingsService } from '@/lib/mock/services';
-import type { MedicalOffice, TimeSlot, Meeting } from '@/lib/types/database.types';
-import { CalendarIcon, ClockIcon, MapPinIcon, PlusIcon, XIcon } from 'lucide-react-native';
-import { format } from 'date-fns';
-import { useAuth } from '@/lib/contexts/AuthContext';
+} from "react-native";
+import { Calendar } from "react-native-calendars";
+import { mockOfficesService, mockMeetingsService } from "@/lib/mock/services";
+import type {
+  MedicalOffice,
+  TimeSlot,
+  Meeting,
+} from "@/lib/types/database.types";
+import {
+  CalendarIcon,
+  ClockIcon,
+  MapPinIcon,
+  PlusIcon,
+  XIcon,
+} from "lucide-react-native";
+import { format } from "date-fns";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { useDataCache } from "@/lib/contexts/DataCacheContext";
+import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
-export default function CalendarScreen() {
+function CalendarScreen() {
   const { user } = useAuth();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [locations, setLocations] = useState<MedicalOffice[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<MedicalOffice | null>(null);
-  const [selectedDate, setSelectedDate] = useState('');
+  const { cache, prefetchTabData, isLoading } = useDataCache();
+  const [selectedLocation, setSelectedLocation] =
+    useState<MedicalOffice | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
 
+  // Get data from cache
+  const meetings = (cache.calendar.meetings.data as Meeting[]) || [];
+  const locations = (cache.calendar.locations.data as MedicalOffice[]) || [];
+
+  // Only show loader if cache is empty AND currently loading
+  const loading =
+    isLoading("calendar") && meetings.length === 0 && locations.length === 0;
+
+  // Background refresh if cache is stale or empty
   useEffect(() => {
-    loadData();
-  }, [user]);
+    if (
+      user &&
+      (!cache.calendar.meetings.data || !cache.calendar.locations.data)
+    ) {
+      prefetchTabData("calendar").catch((error) => {
+        console.error("Error loading calendar data:", error);
+      });
+    }
+  }, [
+    user,
+    cache.calendar.meetings.data,
+    cache.calendar.locations.data,
+    prefetchTabData,
+  ]);
 
   useEffect(() => {
     if (selectedLocation && selectedDate) {
       loadAvailableSlots();
     }
   }, [selectedLocation, selectedDate]);
-
-  const loadData = async () => {
-    if (!user) return;
-
-    try {
-      const [meetingsData, locationsData] = await Promise.all([
-        mockMeetingsService.getUpcomingMeetings(user.id),
-        mockOfficesService.getAllOffices(),
-      ]);
-      setMeetings(meetingsData);
-      setLocations(locationsData);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadAvailableSlots = async () => {
     if (!selectedLocation || !selectedDate) return;
@@ -64,48 +79,53 @@ export default function CalendarScreen() {
       );
       setAvailableSlots(slots);
     } catch (error) {
-      console.error('Error loading slots:', error);
+      console.error("Error loading slots:", error);
       setAvailableSlots([]);
     }
   };
 
   const handleBookMeeting = async () => {
     if (!selectedLocation || !selectedDate || !selectedTime) {
-      Alert.alert('Error', 'Please select a location, date, and time');
+      Alert.alert("Error", "Please select a location, date, and time");
       return;
     }
 
     setBooking(true);
     try {
-      const scheduledAt = new Date(`${selectedDate}T${selectedTime}:00`).toISOString();
+      const scheduledAt = new Date(
+        `${selectedDate}T${selectedTime}:00`
+      ).toISOString();
       await mockMeetingsService.createMeeting(
         selectedLocation.id,
         scheduledAt,
-        'Meeting booked via mobile app'
+        "Meeting booked via mobile app"
       );
 
       Alert.alert(
-        'Success',
+        "Success",
         `Meeting booked at ${selectedLocation.name} on ${format(
           new Date(selectedDate),
-          'MMMM d, yyyy'
+          "MMMM d, yyyy"
         )} at ${selectedTime}`,
         [
           {
-            text: 'OK',
-            onPress: () => {
+            text: "OK",
+            onPress: async () => {
               setSelectedLocation(null);
-              setSelectedDate('');
+              setSelectedDate("");
               setSelectedTime(null);
               setShowBookingModal(false);
-              loadData();
+              // Refresh calendar data after booking
+              await prefetchTabData("calendar");
+              // Also refresh dashboard as it shows upcoming meetings
+              await prefetchTabData("dashboard");
             },
           },
         ]
       );
     } catch (error) {
-      console.error('Error booking meeting:', error);
-      Alert.alert('Error', 'Failed to book meeting. Please try again.');
+      console.error("Error booking meeting:", error);
+      Alert.alert("Error", "Failed to book meeting. Please try again.");
     } finally {
       setBooking(false);
     }
@@ -115,10 +135,10 @@ export default function CalendarScreen() {
     const marked: any = {};
 
     meetings.forEach((meeting) => {
-      const dateStr = meeting.scheduled_at.split('T')[0];
+      const dateStr = meeting.scheduled_at.split("T")[0];
       marked[dateStr] = {
         marked: true,
-        dotColor: '#2563eb',
+        dotColor: "#2563eb",
       };
     });
 
@@ -126,7 +146,7 @@ export default function CalendarScreen() {
       marked[selectedDate] = {
         ...marked[selectedDate],
         selected: true,
-        selectedColor: '#2563eb',
+        selectedColor: "#2563eb",
       };
     }
 
@@ -150,10 +170,10 @@ export default function CalendarScreen() {
             <Calendar
               onDayPress={(day) => setSelectedDate(day.dateString)}
               markedDates={getMarkedDates()}
-              minDate={new Date().toISOString().split('T')[0]}
+              minDate={new Date().toISOString().split("T")[0]}
               theme={{
-                todayTextColor: '#2563eb',
-                arrowColor: '#2563eb',
+                todayTextColor: "#2563eb",
+                arrowColor: "#2563eb",
               }}
             />
           </View>
@@ -175,19 +195,19 @@ export default function CalendarScreen() {
                   >
                     <View className="flex-row items-start justify-between mb-2">
                       <Text className="text-lg font-semibold text-gray-900 flex-1">
-                        {location?.name || 'Medical Office'}
+                        {location?.name || "Medical Office"}
                       </Text>
                     </View>
                     <View className="flex-row items-center mb-1">
                       <CalendarIcon size={16} color="#6b7280" />
                       <Text className="text-gray-600 ml-2">
-                        {format(new Date(meeting.scheduled_at), 'MMMM d, yyyy')}
+                        {format(new Date(meeting.scheduled_at), "MMMM d, yyyy")}
                       </Text>
                     </View>
                     <View className="flex-row items-center mb-1">
                       <ClockIcon size={16} color="#6b7280" />
                       <Text className="text-gray-600 ml-2">
-                        {format(new Date(meeting.scheduled_at), 'h:mm a')}
+                        {format(new Date(meeting.scheduled_at), "h:mm a")}
                       </Text>
                     </View>
                     {location && (
@@ -251,7 +271,9 @@ export default function CalendarScreen() {
                 <TouchableOpacity
                   key={location.id}
                   className={`bg-white rounded-xl p-4 mb-3 shadow-sm ${
-                    selectedLocation?.id === location.id ? 'border-2 border-blue-600' : ''
+                    selectedLocation?.id === location.id
+                      ? "border-2 border-blue-600"
+                      : ""
                   }`}
                   onPress={() => setSelectedLocation(location)}
                 >
@@ -278,13 +300,13 @@ export default function CalendarScreen() {
                     markedDates={{
                       [selectedDate]: {
                         selected: true,
-                        selectedColor: '#2563eb',
+                        selectedColor: "#2563eb",
                       },
                     }}
-                    minDate={new Date().toISOString().split('T')[0]}
+                    minDate={new Date().toISOString().split("T")[0]}
                     theme={{
-                      todayTextColor: '#2563eb',
-                      arrowColor: '#2563eb',
+                      todayTextColor: "#2563eb",
+                      arrowColor: "#2563eb",
                     }}
                   />
 
@@ -302,20 +324,20 @@ export default function CalendarScreen() {
                               disabled={!slot.available}
                               className={`px-4 py-3 rounded-lg ${
                                 selectedTime === slot.time
-                                  ? 'bg-blue-600'
+                                  ? "bg-blue-600"
                                   : slot.available
-                                  ? 'bg-white border border-gray-300'
-                                  : 'bg-gray-100'
+                                  ? "bg-white border border-gray-300"
+                                  : "bg-gray-100"
                               }`}
                               onPress={() => setSelectedTime(slot.time)}
                             >
                               <Text
                                 className={`font-medium ${
                                   selectedTime === slot.time
-                                    ? 'text-white'
+                                    ? "text-white"
                                     : slot.available
-                                    ? 'text-gray-900'
-                                    : 'text-gray-400'
+                                    ? "text-gray-900"
+                                    : "text-gray-400"
                                 }`}
                               >
                                 {slot.time}
@@ -354,5 +376,13 @@ export default function CalendarScreen() {
         </View>
       </Modal>
     </View>
+  );
+}
+
+export default function CalendarScreenWrapper() {
+  return (
+    <AnimatedTabScreen>
+      <CalendarScreen />
+    </AnimatedTabScreen>
   );
 }

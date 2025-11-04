@@ -1,19 +1,4 @@
 import { Stack } from "expo-router";
-import { ArrowLeftIcon } from "lucide-react-native";
-import { TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
-
-function BackToLocationsButton() {
-  const router = useRouter();
-  return (
-    <TouchableOpacity
-      onPress={() => router.push("/(tabs)/locations")}
-      style={{ marginLeft: 16 }}
-    >
-      <ArrowLeftIcon size={24} color="#111827" />
-    </TouchableOpacity>
-  );
-}
 
 export default function LocationsLayout() {
   return (
@@ -26,6 +11,7 @@ export default function LocationsLayout() {
         headerTitleStyle: {
           fontWeight: "600",
         },
+        headerBackTitle: "Back",
       }}
     >
       <Stack.Screen
@@ -38,7 +24,6 @@ export default function LocationsLayout() {
         name="location-detail"
         options={{
           headerTitle: "Location Details",
-          headerLeft: () => <BackToLocationsButton />,
         }}
       />
     </Stack>

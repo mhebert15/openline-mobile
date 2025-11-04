@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,48 +6,60 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '@/lib/contexts/AuthContext';
-import { mockMeetingsService } from '@/lib/mock/services';
-import type { Meeting } from '@/lib/types/database.types';
-import { format } from 'date-fns';
-import { CalendarIcon, MapPinIcon, ClockIcon } from 'lucide-react-native';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { useDataCache } from "@/lib/contexts/DataCacheContext";
+import type { Meeting } from "@/lib/types/database.types";
+import { format } from "date-fns";
+import { CalendarIcon, MapPinIcon, ClockIcon } from "lucide-react-native";
+import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
-export default function DashboardScreen() {
+function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [upcomingMeetings, setUpcomingMeetings] = useState<Meeting[]>([]);
-  const [completedCount, setCompletedCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = async () => {
-    if (!user) return;
+  // Get data from cache
+  const upcomingMeetings =
+    (cache.dashboard.upcomingMeetings.data as Meeting[]) || [];
+  const completedCount = cache.dashboard.completedCount.data || 0;
 
+  // Only show loader if cache is empty AND currently loading
+  const loading =
+    isLoading("dashboard") &&
+    upcomingMeetings.length === 0 &&
+    completedCount === 0;
+
+  // Background refresh if cache is stale or empty
+  useEffect(() => {
+    if (
+      user &&
+      (!cache.dashboard.upcomingMeetings.data ||
+        !cache.dashboard.completedCount.data)
+    ) {
+      prefetchTabData("dashboard").catch((error) => {
+        console.error("Error loading dashboard data:", error);
+      });
+    }
+  }, [
+    user,
+    cache.dashboard.upcomingMeetings.data,
+    cache.dashboard.completedCount.data,
+    prefetchTabData,
+  ]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    invalidateTab("dashboard");
     try {
-      const [upcoming, count] = await Promise.all([
-        mockMeetingsService.getUpcomingMeetings(user.id),
-        mockMeetingsService.getCompletedMeetingsCount(user.id),
-      ]);
-
-      setUpcomingMeetings(upcoming);
-      setCompletedCount(count);
+      await prefetchTabData("dashboard");
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error("Error refreshing dashboard data:", error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadData();
   };
 
   if (loading) {
@@ -72,14 +84,16 @@ export default function DashboardScreen() {
             Welcome back,
           </Text>
           <Text className="text-3xl font-bold text-blue-600">
-            {user?.full_name || 'User'}
+            {user?.full_name || "User"}
           </Text>
         </View>
 
         {/* Stats Cards */}
         <View className="flex-row mb-6 gap-4">
           <View className="flex-1 bg-white rounded-xl p-5 shadow-sm">
-            <Text className="text-gray-600 text-sm mb-2">Completed Meetings</Text>
+            <Text className="text-gray-600 text-sm mb-2">
+              Completed Meetings
+            </Text>
             <Text className="text-3xl font-bold text-gray-900">
               {completedCount}
             </Text>
@@ -95,7 +109,7 @@ export default function DashboardScreen() {
         {/* Book Meeting Button */}
         <TouchableOpacity
           className="bg-blue-600 rounded-xl p-4 mb-6"
-          onPress={() => router.push('/(tabs)/booking')}
+          onPress={() => router.push("/(tabs)/calendar")}
         >
           <Text className="text-white text-center font-semibold text-lg">
             Book New Meeting
@@ -116,7 +130,7 @@ export default function DashboardScreen() {
               </Text>
               <TouchableOpacity
                 className="mt-4"
-                onPress={() => router.push('/(tabs)/booking')}
+                onPress={() => router.push("/(tabs)/calendar")}
               >
                 <Text className="text-blue-600 font-semibold">
                   Book your first meeting
@@ -143,14 +157,17 @@ export default function DashboardScreen() {
                 <View className="flex-row items-center mb-2 ml-11">
                   <ClockIcon size={16} color="#6b7280" />
                   <Text className="text-gray-600 ml-2">
-                    {format(new Date(meeting.scheduled_at), 'EEEE, MMMM d, yyyy')}
+                    {format(
+                      new Date(meeting.scheduled_at),
+                      "EEEE, MMMM d, yyyy"
+                    )}
                   </Text>
                 </View>
 
                 <View className="flex-row items-center mb-2 ml-11">
                   <ClockIcon size={16} color="#6b7280" />
                   <Text className="text-gray-600 ml-2">
-                    {format(new Date(meeting.scheduled_at), 'h:mm a')} •{' '}
+                    {format(new Date(meeting.scheduled_at), "h:mm a")} •{" "}
                     {meeting.duration_minutes} minutes
                   </Text>
                 </View>
@@ -166,7 +183,9 @@ export default function DashboardScreen() {
 
                 {meeting.notes && (
                   <View className="mt-3 pt-3 border-t border-gray-100 ml-11">
-                    <Text className="text-gray-600 text-sm">{meeting.notes}</Text>
+                    <Text className="text-gray-600 text-sm">
+                      {meeting.notes}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -175,5 +194,13 @@ export default function DashboardScreen() {
         </View>
       </View>
     </ScrollView>
+  );
+}
+
+export default function DashboardScreenWrapper() {
+  return (
+    <AnimatedTabScreen>
+      <DashboardScreen />
+    </AnimatedTabScreen>
   );
 }

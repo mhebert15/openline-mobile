@@ -1,28 +1,29 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useAuth } from '@/lib/contexts/AuthContext';
-import { useRouter } from 'expo-router';
+import React from "react";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { useRouter } from "expo-router";
 import {
   UserIcon,
   BellIcon,
   ShieldIcon,
   HelpCircleIcon,
   LogOutIcon,
-} from 'lucide-react-native';
+} from "lucide-react-native";
+import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
-export default function SettingsScreen() {
+function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Sign Out',
-        style: 'destructive',
+        text: "Sign Out",
+        style: "destructive",
         onPress: async () => {
           await signOut();
-          router.replace('/(auth)/sign-in');
+          router.replace("/(auth)/sign-in");
         },
       },
     ]);
@@ -42,7 +43,7 @@ export default function SettingsScreen() {
           <Text className="text-gray-600">{user?.email}</Text>
           <View className="mt-2 bg-blue-50 px-3 py-1 rounded-full">
             <Text className="text-blue-600 text-sm font-medium capitalize">
-              {user?.role?.replace('_', ' ')}
+              {user?.role?.replace("_", " ")}
             </Text>
           </View>
         </View>
@@ -53,19 +54,23 @@ export default function SettingsScreen() {
         <SettingsItem
           icon={<UserIcon size={24} color="#6b7280" />}
           title="Profile Settings"
-          onPress={() => Alert.alert('Coming Soon', 'Profile settings coming soon!')}
+          onPress={() =>
+            Alert.alert("Coming Soon", "Profile settings coming soon!")
+          }
         />
         <SettingsItem
           icon={<BellIcon size={24} color="#6b7280" />}
           title="Notifications"
           onPress={() =>
-            Alert.alert('Coming Soon', 'Notification settings coming soon!')
+            Alert.alert("Coming Soon", "Notification settings coming soon!")
           }
         />
         <SettingsItem
           icon={<ShieldIcon size={24} color="#6b7280" />}
           title="Privacy & Security"
-          onPress={() => Alert.alert('Coming Soon', 'Privacy settings coming soon!')}
+          onPress={() =>
+            Alert.alert("Coming Soon", "Privacy settings coming soon!")
+          }
         />
       </View>
 
@@ -74,7 +79,7 @@ export default function SettingsScreen() {
         <SettingsItem
           icon={<HelpCircleIcon size={24} color="#6b7280" />}
           title="Help & Support"
-          onPress={() => Alert.alert('Coming Soon', 'Help center coming soon!')}
+          onPress={() => Alert.alert("Coming Soon", "Help center coming soon!")}
         />
       </View>
 
@@ -117,10 +122,18 @@ function SettingsItem({
       onPress={onPress}
     >
       <View className="mr-4">{icon}</View>
-      <Text className={`flex-1 text-base ${titleClassName || 'text-gray-900'}`}>
+      <Text className={`flex-1 text-base ${titleClassName || "text-gray-900"}`}>
         {title}
       </Text>
       <Text className="text-gray-400">›</Text>
     </TouchableOpacity>
+  );
+}
+
+export default function SettingsScreenWrapper() {
+  return (
+    <AnimatedTabScreen>
+      <SettingsScreen />
+    </AnimatedTabScreen>
   );
 }

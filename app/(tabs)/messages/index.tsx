@@ -9,51 +9,52 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { mockMessagesService } from "@/lib/mock/services";
 import type { Message } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
+import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
-export default function MessagesScreen() {
+function MessagesScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadMessages = async () => {
-    if (!user) return;
+  // Get data from cache
+  const messages = (cache.messages.messages.data as Message[]) || [];
 
+  // Only show loader if cache is empty AND currently loading
+  const loading = isLoading("messages") && messages.length === 0;
+
+  // Background refresh if cache is stale or empty
+  useEffect(() => {
+    if (user && !cache.messages.messages.data) {
+      prefetchTabData("messages").catch((error) => {
+        console.error("Error loading messages:", error);
+      });
+    }
+  }, [user, cache.messages.messages.data, prefetchTabData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    invalidateTab("messages");
     try {
-      const data = await mockMessagesService.getMessages(user.id);
-      // Sort by created_at descending (newest first)
-      const sorted = data.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      setMessages(sorted);
+      await prefetchTabData("messages");
     } catch (error) {
-      console.error("Error loading messages:", error);
+      console.error("Error refreshing messages:", error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    loadMessages();
-  }, [user]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadMessages();
   };
 
   const handleMessagePress = async (message: Message) => {
     // Mark as read if recipient
     if (message.recipient_id === user?.id && !message.read) {
       await mockMessagesService.markAsRead(message.id);
-      loadMessages();
+      // Refresh messages after marking as read
+      await prefetchTabData("messages");
     }
 
     // Determine the other person in the conversation
@@ -161,5 +162,13 @@ export default function MessagesScreen() {
         <PlusIcon size={28} color="white" />
       </TouchableOpacity>
     </View>
+  );
+}
+
+export default function MessagesScreenWrapper() {
+  return (
+    <AnimatedTabScreen>
+      <MessagesScreen />
+    </AnimatedTabScreen>
   );
 }

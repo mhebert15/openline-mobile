@@ -8,9 +8,30 @@ import {
 } from "lucide-react-native";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TabAnimationProvider } from "@/components/TabAnimationContext";
+import { useDataCache } from "@/lib/contexts/DataCacheContext";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import React from "react";
 
-export default function TabsLayout() {
+function TabsContent() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const { prefetchTabData } = useDataCache();
+
+  // Pre-fetch all tab data when user is authenticated
+  React.useEffect(() => {
+    if (user) {
+      // Pre-fetch all tabs in parallel
+      Promise.all([
+        prefetchTabData("dashboard"),
+        prefetchTabData("calendar"),
+        prefetchTabData("locations"),
+        prefetchTabData("messages"),
+      ]).catch((error) => {
+        console.error("Error prefetching tab data:", error);
+      });
+    }
+  }, [user, prefetchTabData]);
 
   // Calculate dynamic tab bar height for icon-only tabs
   // iOS: 48pt + safe area bottom, Android: 48dp
@@ -83,7 +104,7 @@ export default function TabsLayout() {
         name="locations"
         options={{
           title: "",
-          headerTitle: "Locations",
+          headerShown: false, // Hide tab header - Stack navigator handles it
           tabBarIcon: ({ color, size }) => (
             <MapPinIcon color={color} size={size} />
           ),
@@ -93,7 +114,7 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: "",
-          headerTitle: "Messages",
+          headerShown: false, // Hide tab header - Stack navigator handles it
           tabBarIcon: ({ color, size }) => (
             <MessageCircleIcon color={color} size={size} />
           ),
@@ -110,5 +131,13 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabsLayout() {
+  return (
+    <TabAnimationProvider>
+      <TabsContent />
+    </TabAnimationProvider>
   );
 }
