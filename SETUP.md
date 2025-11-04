@@ -1,4 +1,4 @@
-# Setup Guide - MedRep Connect
+# Setup Guide - Openline
 
 This guide will help you set up the development environment and get the app running.
 
@@ -7,12 +7,15 @@ This guide will help you set up the development environment and get the app runn
 ### Required Software
 
 1. **Node.js** (v18 or higher)
+
    ```bash
    node --version  # Should be v18+
    ```
+
    Download from: https://nodejs.org/
 
 2. **npm** (comes with Node.js)
+
    ```bash
    npm --version
    ```
@@ -42,6 +45,7 @@ This guide will help you set up the development environment and get the app runn
    Download from: https://developer.android.com/studio
 
 2. **Android SDK** (installed via Android Studio)
+
    - SDK Platform: Android 13.0 (API 33) or higher
    - Android SDK Build-Tools
    - Android Emulator
@@ -70,6 +74,7 @@ npm install
 ```
 
 This will install all required packages including:
+
 - React Native and Expo
 - TypeScript
 - NativeWind
@@ -111,6 +116,7 @@ This will start the Expo development server and display a QR code.
 #### Option A: Physical Device (Recommended for testing)
 
 1. Install **Expo Go** app on your phone:
+
    - iOS: https://apps.apple.com/app/expo-go/id982107779
    - Android: https://play.google.com/store/apps/details?id=host.exp.exponent
 
@@ -129,11 +135,13 @@ Or press `i` in the terminal where Expo is running.
 #### Option C: Android Emulator
 
 1. Start an Android emulator from Android Studio, or:
+
    ```bash
    emulator -avd Pixel_5_API_33
    ```
 
 2. Run the app:
+
    ```bash
    npm run android
    ```
@@ -163,6 +171,7 @@ After the app starts, you should see:
 ### Issue: Metro bundler won't start
 
 **Solution**: Clear caches and restart
+
 ```bash
 npm start -- --clear
 ```
@@ -170,6 +179,7 @@ npm start -- --clear
 ### Issue: "Unable to resolve module"
 
 **Solution**:
+
 ```bash
 rm -rf node_modules
 npm install
@@ -179,6 +189,7 @@ npm start -- --clear
 ### Issue: iOS build fails
 
 **Solution**:
+
 ```bash
 cd ios
 pod install
@@ -189,6 +200,7 @@ npm run ios
 ### Issue: Android build fails
 
 **Solution**:
+
 ```bash
 cd android
 ./gradlew clean
@@ -199,6 +211,7 @@ npm run android
 ### Issue: TypeScript errors
 
 **Solution**: Check for type errors
+
 ```bash
 npx tsc --noEmit
 ```
@@ -253,11 +266,12 @@ npm run test:coverage
 Tests are located in `__tests__/` directory.
 
 Example test:
-```typescript
-import { describe, it, expect } from 'vitest';
 
-describe('My Feature', () => {
-  it('should work correctly', () => {
+```typescript
+import { describe, it, expect } from "vitest";
+
+describe("My Feature", () => {
+  it("should work correctly", () => {
     expect(true).toBe(true);
   });
 });
@@ -387,11 +401,11 @@ const meetings = await mockMeetingsService.getUpcomingMeetings(userId);
 
 // After
 const { data: meetings } = await supabase
-  .from('meetings')
-  .select('*, office:medical_offices(*)')
-  .eq('medical_rep_id', userId)
-  .eq('status', 'scheduled')
-  .gt('scheduled_at', new Date().toISOString());
+  .from("meetings")
+  .select("*, office:medical_offices(*)")
+  .eq("medical_rep_id", userId)
+  .eq("status", "scheduled")
+  .gt("scheduled_at", new Date().toISOString());
 ```
 
 ## Debugging
@@ -429,21 +443,25 @@ npx react-native log-ios | grep "MyComponent"
 ### Using EAS (Expo Application Services)
 
 1. Install EAS CLI:
+
    ```bash
    npm install -g eas-cli
    ```
 
 2. Login:
+
    ```bash
    eas login
    ```
 
 3. Configure:
+
    ```bash
    eas build:configure
    ```
 
 4. Build:
+
    ```bash
    # iOS
    eas build --platform ios --profile production

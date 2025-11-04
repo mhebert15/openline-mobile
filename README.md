@@ -1,4 +1,4 @@
-# MedRep Connect
+# Openline
 
 A mobile application for medical representatives to book meetings at medical offices and communicate with office staff.
 
@@ -38,22 +38,26 @@ A mobile application for medical representatives to book meetings at medical off
 ## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
 cd openline-mobile
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Set up environment variables:
+
 ```bash
 cp .env.example .env
 ```
 
 Edit `.env` and add your Supabase credentials (optional for demo):
+
 ```
 EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
@@ -64,11 +68,13 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ### Development
 
 Start the development server:
+
 ```bash
 npm start
 ```
 
 Then choose your platform:
+
 - Press `i` for iOS simulator
 - Press `a` for Android emulator
 - Scan the QR code with Expo Go app for physical device
@@ -150,6 +156,7 @@ The app uses Supabase magic link authentication. In demo mode, it uses mock auth
 ### Dashboard
 
 Shows:
+
 - Welcome message with user name
 - Count of completed meetings
 - Number of upcoming meetings
@@ -161,6 +168,7 @@ Shows:
 ### Booking
 
 Two-tab interface:
+
 1. **Locations Tab**: Browse and select medical offices
 2. **Calendar Tab**:
    - Select appointment date
@@ -178,6 +186,7 @@ Two-tab interface:
 - Mark messages as read
 
 **Locations**:
+
 - List: `app/(tabs)/messages.tsx`
 - Detail: `app/message-detail.tsx`
 - Compose: `app/compose-message.tsx`
@@ -186,9 +195,9 @@ Two-tab interface:
 
 ### Deep Links
 
-The app is configured for deep linking with the scheme `medrepconnect://`
+The app is configured for deep linking with the scheme `openline://`
 
-**iOS**: Universal Links configured for `medrepconnect.com`
+**iOS**: Universal Links configured for `openline.com`
 **Android**: Intent filters set up for the same domain
 
 ### Push Notifications
@@ -198,10 +207,12 @@ Expo Notifications is configured. See `app.json` for notification settings.
 ### Permissions
 
 **iOS**:
+
 - Camera (for QR code scanning - future feature)
 - Location (for finding nearby offices)
 
 **Android**:
+
 - Camera
 - Location
 - Post Notifications
@@ -256,6 +267,7 @@ The app uses Vitest for unit and integration testing:
 ### Build Issues
 
 If you encounter build issues, try:
+
 ```bash
 # Clear caches
 rm -rf node_modules

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,23 +8,23 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-} from 'react-native';
-import { useAuth } from '@/lib/contexts/AuthContext';
+} from "react-native";
+import { useAuth } from "@/lib/contexts/AuthContext";
 
 export default function SignInScreen() {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
   const { signIn } = useAuth();
 
   const handleSignIn = async () => {
     if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
+      Alert.alert("Error", "Please enter your email address");
       return;
     }
 
-    if (!email.includes('@')) {
-      Alert.alert('Error', 'Please enter a valid email address');
+    if (!email.includes("@")) {
+      Alert.alert("Error", "Please enter a valid email address");
       return;
     }
 
@@ -35,13 +35,13 @@ export default function SignInScreen() {
     if (result.success) {
       setLinkSent(true);
     } else {
-      Alert.alert('Error', result.message);
+      Alert.alert("Error", result.message);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1 bg-white"
     >
       <View className="flex-1 justify-center px-6">
@@ -50,7 +50,7 @@ export default function SignInScreen() {
             Welcome to
           </Text>
           <Text className="text-4xl font-bold text-blue-600 mb-4">
-            MedRep Connect
+            Openline
           </Text>
           <Text className="text-lg text-gray-600">
             Book meetings and connect with medical offices
@@ -77,7 +77,7 @@ export default function SignInScreen() {
 
             <TouchableOpacity
               className={`rounded-lg py-4 ${
-                loading ? 'bg-blue-400' : 'bg-blue-600'
+                loading ? "bg-blue-400" : "bg-blue-600"
               }`}
               onPress={handleSignIn}
               disabled={loading}
@@ -104,8 +104,8 @@ export default function SignInScreen() {
               We've sent a magic link to {email}
             </Text>
             <Text className="text-sm text-blue-600 mb-4">
-              Click the link in your email to sign in. For demo purposes, you'll be
-              automatically signed in shortly.
+              Click the link in your email to sign in. For demo purposes, you'll
+              be automatically signed in shortly.
             </Text>
             <ActivityIndicator size="large" color="#2563eb" />
           </View>

@@ -1,8 +1,8 @@
-# MedRep Connect - Architecture Documentation
+# Openline - Architecture Documentation
 
 ## Overview
 
-MedRep Connect is a React Native mobile application built with Expo, designed for medical representatives to manage their appointments and communications with medical offices.
+Openline is a React Native mobile application built with Expo, designed for medical representatives to manage their appointments and communications with medical offices.
 
 ## Architecture Principles
 
@@ -28,11 +28,13 @@ app/
 ```
 
 **Key Patterns**:
+
 - **Route Groups**: Parentheses `()` create layout groups without affecting URLs
 - **Layouts**: `_layout.tsx` files define nested navigation structures
 - **Type-safe Navigation**: Expo Router provides automatic type generation
 
 **Example Route Structure**:
+
 ```
 / -> redirects based on auth state
 /(auth)/sign-in -> Sign in screen
@@ -48,6 +50,7 @@ app/
 #### Context Providers
 
 **AuthContext** (`lib/contexts/AuthContext.tsx`)
+
 - Manages authentication state
 - Provides sign in/out methods
 - Handles session persistence
@@ -60,11 +63,13 @@ const { user, loading, signIn, signOut } = useAuth();
 #### Services
 
 **Mock Services** (`lib/mock/services.ts`)
+
 - Simulate API calls with realistic delays
 - Provide CRUD operations for all entities
 - Easy to swap with real API calls
 
 Service Categories:
+
 - `mockAuthService`: User authentication
 - `mockMeetingsService`: Meeting management
 - `mockOfficesService`: Office locations and availability
@@ -77,11 +82,13 @@ Service Categories:
 #### Type Definitions
 
 **database.types.ts**
+
 - Mirrors Supabase database schema
 - Provides type safety across the app
 - Includes table row types and insert/update types
 
 Main Entities:
+
 ```typescript
 - User: Application users (reps and admins)
 - MedicalOffice: Office locations
@@ -93,6 +100,7 @@ Main Entities:
 #### Mock Data
 
 **data.ts**
+
 - Sample users, offices, meetings, messages
 - Realistic test data for development
 - Easily extendable
@@ -122,6 +130,7 @@ RootLayout (_layout.tsx)
 ### Tab Navigation
 
 Bottom tab bar with 4 main sections:
+
 1. **Dashboard** (index): Home screen with stats
 2. **Booking**: Location and calendar views
 3. **Messages**: Message list
@@ -132,6 +141,7 @@ Bottom tab bar with 4 main sections:
 ### Modal Navigation
 
 Full-screen modals for focused tasks:
+
 - `message-detail`: View message
 - `compose-message`: Create message
 
@@ -160,6 +170,7 @@ UI Re-render
 ```
 
 Example: Booking a Meeting
+
 ```typescript
 handleBookMeeting()
     ↓
@@ -205,6 +216,7 @@ export default function Screen() {
 Used in: Dashboard, Messages, Booking (Locations)
 
 Features:
+
 - Pull-to-refresh
 - Empty states
 - Loading states
@@ -217,6 +229,7 @@ Features:
 Used in: Compose Message, Sign In
 
 Features:
+
 - Input validation
 - Submit handling
 - Error display
@@ -233,17 +246,17 @@ Utility-first CSS framework adapted for React Native.
 **Configuration**: `tailwind.config.js`
 
 **Usage**:
+
 ```typescript
 <View className="flex-1 bg-gray-50 p-6">
-  <Text className="text-2xl font-bold text-gray-900">
-    Title
-  </Text>
+  <Text className="text-2xl font-bold text-gray-900">Title</Text>
 </View>
 ```
 
 ### Design System
 
 **Colors**:
+
 - Primary: Blue 600 (#2563eb)
 - Success: Green 600
 - Error: Red 600
@@ -252,6 +265,7 @@ Utility-first CSS framework adapted for React Native.
 **Spacing**: Standard Tailwind spacing scale (4px base)
 
 **Typography**:
+
 - Headings: Bold, varying sizes
 - Body: Regular, 16px base
 - Small: 14px for meta information
@@ -259,6 +273,7 @@ Utility-first CSS framework adapted for React Native.
 ### Responsive Design
 
 NativeWind automatically handles platform differences:
+
 - Safe area handling via `react-native-safe-area-context`
 - Platform-specific adjustments where needed
 - Consistent spacing and sizing
@@ -314,8 +329,8 @@ try {
   const data = await service.getData();
   setData(data);
 } catch (error) {
-  console.error('Error loading data:', error);
-  Alert.alert('Error', 'Failed to load data');
+  console.error("Error loading data:", error);
+  Alert.alert("Error", "Failed to load data");
 } finally {
   setLoading(false);
 }
@@ -343,6 +358,7 @@ __tests__/
 **Integration Tests**: User workflows across screens
 
 **Tools**:
+
 - Vitest: Test runner
 - React Native Testing Library: Component testing
 - Mock services: Isolated testing
@@ -390,11 +406,13 @@ __tests__/
 ### Adding a New Screen
 
 1. Create file in appropriate directory:
+
    - Tab: `app/(tabs)/new-screen.tsx`
    - Modal: `app/new-screen.tsx`
    - Auth: `app/(auth)/new-screen.tsx`
 
 2. Add navigation config if needed:
+
    - Update `_layout.tsx` for tab screens
 
 3. Follow screen pattern:
@@ -424,11 +442,11 @@ const meetings = await mockMeetingsService.getUpcomingMeetings(userId);
 
 // After (Real)
 const { data: meetings } = await supabase
-  .from('meetings')
-  .select('*, office:medical_offices(*)')
-  .eq('medical_rep_id', userId)
-  .eq('status', 'scheduled')
-  .gt('scheduled_at', new Date().toISOString());
+  .from("meetings")
+  .select("*, office:medical_offices(*)")
+  .eq("medical_rep_id", userId)
+  .eq("status", "scheduled")
+  .gt("scheduled_at", new Date().toISOString());
 ```
 
 ## Development Workflow
@@ -503,6 +521,7 @@ npm update
 ## Conclusion
 
 This architecture provides:
+
 - ✅ Clear separation of concerns
 - ✅ Type safety throughout
 - ✅ Easy testing with mocks

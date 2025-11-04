@@ -96,7 +96,7 @@ function SettingsScreen() {
       {/* App Version */}
       <View className="p-6">
         <Text className="text-center text-gray-500 text-sm">
-          MedRep Connect v1.0.0
+          Openline v1.0.0
         </Text>
       </View>
     </ScrollView>

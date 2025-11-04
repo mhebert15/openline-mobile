@@ -37,9 +37,9 @@ function TabsContent() {
   // iOS: 48pt + safe area bottom, Android: 48dp
   const tabBarHeight =
     Platform.select({
-      ios: 48 + insets.bottom,
-      android: 48,
-    }) ?? 48;
+      ios: 28 + insets.bottom,
+      android: 28,
+    }) ?? 28;
 
   return (
     <Tabs
@@ -56,7 +56,7 @@ function TabsContent() {
             android: 4,
           }),
           paddingTop: 8,
-          paddingHorizontal: 0,
+          paddingHorizontal: 24,
           paddingVertical: 0,
           justifyContent: "space-around",
           flexDirection: "row",
@@ -93,7 +93,7 @@ function TabsContent() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "",
+          title: "Calendar",
           headerTitle: "Calendar",
           tabBarIcon: ({ color, size }) => (
             <CalendarIcon color={color} size={size} />

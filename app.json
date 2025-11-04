@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MedRep Connect",
-    "slug": "medrep-connect",
+    "name": "Openline",
+    "slug": "openline-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "medrepconnect",
+    "scheme": "openline",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.medrepconnect.app",
+      "bundleIdentifier": "com.openline.app",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for quick office check-in.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice messages.",
@@ -24,12 +24,12 @@
       "entitlements": {
         "aps-environment": "production",
         "com.apple.developer.associated-domains": [
-          "applinks:medrepconnect.com"
+          "applinks:openline.com"
         ]
       }
     },
     "android": {
-      "package": "com.medrepconnect.app",
+      "package": "com.openline.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -49,7 +49,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "medrepconnect.com",
+              "host": "openline.com",
               "pathPrefix": "/"
             }
           ],
