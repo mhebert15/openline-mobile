@@ -257,7 +257,7 @@ Utility-first CSS framework adapted for React Native.
 
 **Colors**:
 
-- Primary: Blue 600 (#2563eb)
+- Primary: Blue (#0086c9)
 - Success: Green 600
 - Error: Red 600
 - Gray Scale: 50-900

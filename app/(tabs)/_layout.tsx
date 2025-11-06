@@ -44,7 +44,7 @@ function TabsContent() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#2563eb",
+        tabBarActiveTintColor: "#0086c9",
         tabBarInactiveTintColor: "#6b7280",
         tabBarStyle: {
           backgroundColor: "#ffffff",
@@ -84,7 +84,7 @@ function TabsContent() {
         name="index"
         options={{
           title: "",
-          headerTitle: "Dashboard",
+          headerShown: false, // Hide navigation header
           tabBarIcon: ({ color, size }) => (
             <HomeIcon color={color} size={size} />
           ),
@@ -93,8 +93,8 @@ function TabsContent() {
       <Tabs.Screen
         name="calendar"
         options={{
-          title: "Calendar",
-          headerTitle: "Calendar",
+          title: "",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <CalendarIcon color={color} size={size} />
           ),
@@ -124,7 +124,7 @@ function TabsContent() {
         name="settings"
         options={{
           title: "",
-          headerTitle: "Settings",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <SettingsIcon color={color} size={size} />
           ),

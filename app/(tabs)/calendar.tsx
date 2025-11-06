@@ -26,10 +26,12 @@ import { format } from "date-fns";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function CalendarScreen() {
   const { user } = useAuth();
   const { cache, prefetchTabData, isLoading } = useDataCache();
+  const insets = useSafeAreaInsets();
   const [selectedLocation, setSelectedLocation] =
     useState<MedicalOffice | null>(null);
   const [selectedDate, setSelectedDate] = useState("");
@@ -138,7 +140,7 @@ function CalendarScreen() {
       const dateStr = meeting.scheduled_at.split("T")[0];
       marked[dateStr] = {
         marked: true,
-        dotColor: "#2563eb",
+        dotColor: "#0086c9",
       };
     });
 
@@ -146,7 +148,7 @@ function CalendarScreen() {
       marked[selectedDate] = {
         ...marked[selectedDate],
         selected: true,
-        selectedColor: "#2563eb",
+        selectedColor: "#0086c9",
       };
     }
 
@@ -156,24 +158,26 @@ function CalendarScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#0086c9" />
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingTop: insets.top || 0 }}
+      >
         <View className="p-4">
-          {/* Calendar */}
           <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
             <Calendar
               onDayPress={(day) => setSelectedDate(day.dateString)}
               markedDates={getMarkedDates()}
               minDate={new Date().toISOString().split("T")[0]}
               theme={{
-                todayTextColor: "#2563eb",
-                arrowColor: "#2563eb",
+                todayTextColor: "#0086c9",
+                arrowColor: "#0086c9",
               }}
             />
           </View>
@@ -235,7 +239,8 @@ function CalendarScreen() {
       {/* Book New Meeting Button */}
       <View className="p-4 bg-white border-t border-gray-200">
         <TouchableOpacity
-          className="bg-blue-600 rounded-xl p-4 flex-row items-center justify-center"
+          className="rounded-xl p-4 flex-row items-center justify-center"
+          style={{ backgroundColor: "#0086c9" }}
           onPress={() => setShowBookingModal(true)}
         >
           <PlusIcon size={20} color="white" />
@@ -271,10 +276,13 @@ function CalendarScreen() {
                 <TouchableOpacity
                   key={location.id}
                   className={`bg-white rounded-xl p-4 mb-3 shadow-sm ${
-                    selectedLocation?.id === location.id
-                      ? "border-2 border-blue-600"
-                      : ""
+                    selectedLocation?.id === location.id ? "border-2" : ""
                   }`}
+                  style={
+                    selectedLocation?.id === location.id
+                      ? { borderColor: "#0086c9" }
+                      : undefined
+                  }
                   onPress={() => setSelectedLocation(location)}
                 >
                   <Text className="text-lg font-semibold text-gray-900 mb-1">
@@ -300,13 +308,13 @@ function CalendarScreen() {
                     markedDates={{
                       [selectedDate]: {
                         selected: true,
-                        selectedColor: "#2563eb",
+                        selectedColor: "#0086c9",
                       },
                     }}
                     minDate={new Date().toISOString().split("T")[0]}
                     theme={{
-                      todayTextColor: "#2563eb",
-                      arrowColor: "#2563eb",
+                      todayTextColor: "#0086c9",
+                      arrowColor: "#0086c9",
                     }}
                   />
 
@@ -324,11 +332,16 @@ function CalendarScreen() {
                               disabled={!slot.available}
                               className={`px-4 py-3 rounded-lg ${
                                 selectedTime === slot.time
-                                  ? "bg-blue-600"
+                                  ? ""
                                   : slot.available
                                   ? "bg-white border border-gray-300"
                                   : "bg-gray-100"
                               }`}
+                              style={
+                                selectedTime === slot.time
+                                  ? { backgroundColor: "#0086c9" }
+                                  : undefined
+                              }
                               onPress={() => setSelectedTime(slot.time)}
                             >
                               <Text
@@ -356,7 +369,8 @@ function CalendarScreen() {
                   {/* Confirm Button */}
                   {selectedTime && (
                     <TouchableOpacity
-                      className="bg-blue-600 rounded-xl p-4 mt-6 mb-8"
+                      className="rounded-xl p-4 mt-6 mb-8"
+                      style={{ backgroundColor: "#0086c9" }}
                       onPress={handleBookMeeting}
                       disabled={booking}
                     >

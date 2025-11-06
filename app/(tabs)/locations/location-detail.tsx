@@ -1,14 +1,8 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { mockOffices, mockAdminUsers } from '@/lib/mock/data';
-import type { MedicalOffice } from '@/lib/types/database.types';
+import React, { useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { mockOffices, mockAdminUsers } from "@/lib/mock/data";
+import type { MedicalOffice } from "@/lib/types/database.types";
 import {
   MapPinIcon,
   PhoneIcon,
@@ -18,7 +12,7 @@ import {
   MessageSquareIcon,
   ChevronRightIcon,
   ClockIcon,
-} from 'lucide-react-native';
+} from "lucide-react-native";
 
 export default function LocationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -41,11 +35,11 @@ export default function LocationDetailScreen() {
 
   const handleSendMessage = () => {
     if (!adminUser) {
-      Alert.alert('Error', 'Admin contact not available');
+      Alert.alert("Error", "Admin contact not available");
       return;
     }
     router.push({
-      pathname: '/compose-message',
+      pathname: "/compose-message",
       params: {
         officeId: location.id,
         officeName: location.name,
@@ -56,15 +50,15 @@ export default function LocationDetailScreen() {
   };
 
   const handleBookMeeting = () => {
-    router.push('/(tabs)/calendar');
+    router.push("/(tabs)/calendar");
   };
 
   const daysOfWeek = [
-    { key: 'monday', label: 'Monday' },
-    { key: 'tuesday', label: 'Tuesday' },
-    { key: 'wednesday', label: 'Wednesday' },
-    { key: 'thursday', label: 'Thursday' },
-    { key: 'friday', label: 'Friday' },
+    { key: "monday", label: "Monday" },
+    { key: "tuesday", label: "Tuesday" },
+    { key: "wednesday", label: "Wednesday" },
+    { key: "thursday", label: "Thursday" },
+    { key: "friday", label: "Friday" },
   ];
 
   return (
@@ -78,7 +72,7 @@ export default function LocationDetailScreen() {
           <View className="flex-row items-center mb-2">
             <MapPinIcon size={16} color="#6b7280" />
             <Text className="text-gray-600 ml-2">
-              {location.address}, {location.city}, {location.state}{' '}
+              {location.address}, {location.city}, {location.state}{" "}
               {location.zip_code}
             </Text>
           </View>
@@ -93,7 +87,7 @@ export default function LocationDetailScreen() {
           {location.practitioners && location.practitioners.length > 0 && (
             <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
               <View className="flex-row items-center mb-3">
-                <UserIcon size={20} color="#2563eb" />
+                <UserIcon size={20} color="#0086c9" />
                 <Text className="text-lg font-semibold text-gray-900 ml-2">
                   Medical Practitioners
                 </Text>
@@ -103,8 +97,8 @@ export default function LocationDetailScreen() {
                   key={practitioner.id}
                   className={`py-3 ${
                     index < location.practitioners!.length - 1
-                      ? 'border-b border-gray-100'
-                      : ''
+                      ? "border-b border-gray-100"
+                      : ""
                   }`}
                 >
                   <Text className="text-gray-900 font-medium">
@@ -122,7 +116,7 @@ export default function LocationDetailScreen() {
           {location.preferred_meeting_times && (
             <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
               <View className="flex-row items-center mb-3">
-                <ClockIcon size={20} color="#2563eb" />
+                <ClockIcon size={20} color="#0086c9" />
                 <Text className="text-lg font-semibold text-gray-900 ml-2">
                   Preferred Meeting Times
                 </Text>
@@ -139,7 +133,10 @@ export default function LocationDetailScreen() {
                       {day.label}
                     </Text>
                     {times.map((time, idx) => (
-                      <Text key={idx} className="text-gray-600 text-sm ml-2 mt-1">
+                      <Text
+                        key={idx}
+                        className="text-gray-600 text-sm ml-2 mt-1"
+                      >
                         • {time}
                       </Text>
                     ))}
@@ -153,7 +150,7 @@ export default function LocationDetailScreen() {
           {location.food_preferences && (
             <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
               <View className="flex-row items-center mb-3">
-                <UtensilsIcon size={20} color="#2563eb" />
+                <UtensilsIcon size={20} color="#0086c9" />
                 <Text className="text-lg font-semibold text-gray-900 ml-2">
                   Food Preferences
                 </Text>
@@ -230,7 +227,8 @@ export default function LocationDetailScreen() {
       {/* Action Buttons */}
       <View className="bg-white border-t border-gray-200 px-4 py-4">
         <TouchableOpacity
-          className="bg-blue-600 rounded-xl p-4 flex-row items-center justify-center mb-3"
+          className="rounded-xl p-4 flex-row items-center justify-center mb-3"
+          style={{ backgroundColor: "#0086c9" }}
           onPress={handleBookMeeting}
         >
           <CalendarIcon size={20} color="white" />
@@ -240,11 +238,15 @@ export default function LocationDetailScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          className="bg-white border-2 border-blue-600 rounded-xl p-4 flex-row items-center justify-center"
+          className="bg-white border-2 rounded-xl p-4 flex-row items-center justify-center"
+          style={{ borderColor: "#0086c9" }}
           onPress={handleSendMessage}
         >
-          <MessageSquareIcon size={20} color="#2563eb" />
-          <Text className="text-blue-600 font-semibold text-lg ml-2">
+          <MessageSquareIcon size={20} color="#0086c9" />
+          <Text
+            className="font-semibold text-lg ml-2"
+            style={{ color: "#0086c9" }}
+          >
             Send Message
           </Text>
         </TouchableOpacity>

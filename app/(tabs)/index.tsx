@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import type { Meeting } from "@/lib/types/database.types";
@@ -18,6 +19,7 @@ import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -65,7 +67,7 @@ function DashboardScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#0086c9" />
       </View>
     );
   }
@@ -76,6 +78,9 @@ function DashboardScreen() {
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
+      contentContainerStyle={{
+        paddingTop: insets.top, // Safe area top
+      }}
     >
       <View className="p-6">
         {/* Welcome Section */}
@@ -83,7 +88,7 @@ function DashboardScreen() {
           <Text className="text-3xl font-bold text-gray-900 mb-1">
             Welcome back,
           </Text>
-          <Text className="text-3xl font-bold text-blue-600">
+          <Text className="text-3xl font-bold" style={{ color: "#0086c9" }}>
             {user?.full_name || "User"}
           </Text>
         </View>
@@ -100,7 +105,7 @@ function DashboardScreen() {
           </View>
           <View className="flex-1 bg-white rounded-xl p-5 shadow-sm">
             <Text className="text-gray-600 text-sm mb-2">Upcoming</Text>
-            <Text className="text-3xl font-bold text-blue-600">
+            <Text className="text-3xl font-bold" style={{ color: "#0086c9" }}>
               {upcomingMeetings.length}
             </Text>
           </View>
@@ -108,7 +113,8 @@ function DashboardScreen() {
 
         {/* Book Meeting Button */}
         <TouchableOpacity
-          className="bg-blue-600 rounded-xl p-4 mb-6"
+          className="rounded-xl p-4 mb-6"
+          style={{ backgroundColor: "#0086c9" }}
           onPress={() => router.push("/(tabs)/calendar")}
         >
           <Text className="text-white text-center font-semibold text-lg">
@@ -132,7 +138,7 @@ function DashboardScreen() {
                 className="mt-4"
                 onPress={() => router.push("/(tabs)/calendar")}
               >
-                <Text className="text-blue-600 font-semibold">
+                <Text className="font-semibold" style={{ color: "#0086c9" }}>
                   Book your first meeting
                 </Text>
               </TouchableOpacity>
@@ -145,7 +151,7 @@ function DashboardScreen() {
               >
                 <View className="flex-row items-center mb-2">
                   <View className="bg-blue-100 rounded-lg p-2 mr-3">
-                    <CalendarIcon size={20} color="#2563eb" />
+                    <CalendarIcon size={20} color="#0086c9" />
                   </View>
                   <View className="flex-1">
                     <Text className="text-lg font-semibold text-gray-900">

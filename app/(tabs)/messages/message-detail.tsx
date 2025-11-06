@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,14 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { mockMessages } from '@/lib/mock/data';
-import { mockMessagesService } from '@/lib/mock/services';
-import { useAuth } from '@/lib/contexts/AuthContext';
-import type { Message } from '@/lib/types/database.types';
-import { format } from 'date-fns';
-import { SendIcon } from 'lucide-react-native';
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { mockMessages } from "@/lib/mock/data";
+import { mockMessagesService } from "@/lib/mock/services";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import type { Message } from "@/lib/types/database.types";
+import { format } from "date-fns";
+import { SendIcon } from "lucide-react-native";
 
 export default function MessageDetailScreen() {
   const { officeId, recipientId, recipientName } = useLocalSearchParams<{
@@ -28,7 +28,7 @@ export default function MessageDetailScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [messageText, setMessageText] = useState('');
+  const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -69,11 +69,11 @@ export default function MessageDetailScreen() {
       await mockMessagesService.sendMessage(
         recipientId,
         officeId,
-        'Re: Conversation',
+        "Re: Conversation",
         messageText.trim()
       );
 
-      setMessageText('');
+      setMessageText("");
       loadConversation();
 
       // Scroll to bottom after sending
@@ -81,7 +81,7 @@ export default function MessageDetailScreen() {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
     } finally {
       setSending(false);
     }
@@ -90,7 +90,7 @@ export default function MessageDetailScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#0086c9" />
       </View>
     );
   }
@@ -102,25 +102,27 @@ export default function MessageDetailScreen() {
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return format(date, 'h:mm a');
+      return format(date, "h:mm a");
     } else if (date.toDateString() === yesterday.toDateString()) {
-      return `Yesterday ${format(date, 'h:mm a')}`;
+      return `Yesterday ${format(date, "h:mm a")}`;
     } else {
-      return format(date, 'MMM d, h:mm a');
+      return format(date, "MMM d, h:mm a");
     }
   };
 
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-gray-100"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
       {/* Messages ScrollView */}
       <ScrollView
         ref={scrollViewRef}
         className="flex-1 px-4 py-4"
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() =>
+          scrollViewRef.current?.scrollToEnd({ animated: true })
+        }
       >
         {messages.length === 0 ? (
           <View className="flex-1 items-center justify-center py-12">
@@ -146,19 +148,20 @@ export default function MessageDetailScreen() {
                 )}
                 <View
                   className={`flex-row ${
-                    isSentByMe ? 'justify-end' : 'justify-start'
+                    isSentByMe ? "justify-end" : "justify-start"
                   }`}
                 >
                   <View
                     className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                      isSentByMe
-                        ? 'bg-blue-600'
-                        : 'bg-white border border-gray-200'
+                      isSentByMe ? "" : "bg-white border border-gray-200"
                     }`}
+                    style={
+                      isSentByMe ? { backgroundColor: "#0086c9" } : undefined
+                    }
                   >
                     <Text
                       className={`text-base ${
-                        isSentByMe ? 'text-white' : 'text-gray-900'
+                        isSentByMe ? "text-white" : "text-gray-900"
                       }`}
                     >
                       {message.content}
@@ -186,8 +189,13 @@ export default function MessageDetailScreen() {
           />
           <TouchableOpacity
             className={`w-10 h-10 rounded-full items-center justify-center ${
-              messageText.trim() && !sending ? 'bg-blue-600' : 'bg-gray-300'
+              messageText.trim() && !sending ? "" : "bg-gray-300"
             }`}
+            style={
+              messageText.trim() && !sending
+                ? { backgroundColor: "#0086c9" }
+                : undefined
+            }
             onPress={handleSend}
             disabled={!messageText.trim() || sending}
           >
@@ -197,7 +205,7 @@ export default function MessageDetailScreen() {
               <SendIcon
                 size={20}
                 color="white"
-                style={{ transform: [{ rotate: '45deg' }] }}
+                style={{ transform: [{ rotate: "45deg" }] }}
               />
             )}
           </TouchableOpacity>

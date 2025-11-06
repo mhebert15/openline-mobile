@@ -75,7 +75,7 @@ function MessagesScreen() {
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#0086c9" />
       </View>
     );
   }
@@ -99,7 +99,7 @@ function MessagesScreen() {
                 className="mt-4"
                 onPress={() => router.push("/compose-message")}
               >
-                <Text className="text-blue-600 font-semibold">
+                <Text className="font-semibold" style={{ color: "#0086c9" }}>
                   Send your first message
                 </Text>
               </TouchableOpacity>
@@ -115,9 +115,12 @@ function MessagesScreen() {
                 <TouchableOpacity
                   key={message.id}
                   className={`bg-white rounded-xl p-4 mb-3 shadow-sm ${
+                    isRecipient && !message.read ? "border-l-4" : ""
+                  }
+                  style={
                     isRecipient && !message.read
-                      ? "border-l-4 border-blue-600"
-                      : ""
+                      ? { borderLeftColor: "#0086c9" }
+                      : undefined
                   }`}
                   onPress={() => handleMessagePress(message)}
                 >
@@ -131,7 +134,10 @@ function MessagesScreen() {
                       </Text>
                     </View>
                     {isRecipient && !message.read && (
-                      <View className="bg-blue-600 rounded-full w-2 h-2 mt-2" />
+                      <View
+                        className="rounded-full w-2 h-2 mt-2"
+                        style={{ backgroundColor: "#0086c9" }}
+                      />
                     )}
                   </View>
 
@@ -156,7 +162,8 @@ function MessagesScreen() {
 
       {/* Floating Action Button */}
       <TouchableOpacity
-        className="absolute bottom-6 right-6 bg-blue-600 rounded-full w-14 h-14 items-center justify-center shadow-lg"
+        className="absolute bottom-6 right-6 rounded-full w-14 h-14 items-center justify-center shadow-lg"
+        style={{ backgroundColor: "#0086c9" }}
         onPress={() => router.push("/compose-message")}
       >
         <PlusIcon size={28} color="white" />

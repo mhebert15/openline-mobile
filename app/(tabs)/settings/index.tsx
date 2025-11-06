@@ -35,14 +35,17 @@ function SettingsScreen() {
       <View className="bg-white p-6 mb-2">
         <View className="items-center">
           <View className="bg-blue-100 rounded-full w-20 h-20 items-center justify-center mb-3">
-            <UserIcon size={40} color="#2563eb" />
+            <UserIcon size={40} color="#0086c9" />
           </View>
           <Text className="text-xl font-bold text-gray-900">
             {user?.full_name}
           </Text>
           <Text className="text-gray-600">{user?.email}</Text>
           <View className="mt-2 bg-blue-50 px-3 py-1 rounded-full">
-            <Text className="text-blue-600 text-sm font-medium capitalize">
+            <Text
+              className="text-sm font-medium capitalize"
+              style={{ color: "#0086c9" }}
+            >
               {user?.role?.replace("_", " ")}
             </Text>
           </View>

@@ -49,7 +49,10 @@ export default function SignInScreen() {
           <Text className="text-4xl font-bold text-gray-900 mb-3">
             Welcome to
           </Text>
-          <Text className="text-4xl font-bold text-blue-600 mb-4">
+          <Text
+            className="text-4xl font-bold mb-4"
+            style={{ color: "#0086c9" }}
+          >
             Openline
           </Text>
           <Text className="text-lg text-gray-600">
@@ -76,9 +79,8 @@ export default function SignInScreen() {
             </View>
 
             <TouchableOpacity
-              className={`rounded-lg py-4 ${
-                loading ? "bg-blue-400" : "bg-blue-600"
-              }`}
+              className="rounded-lg py-4"
+              style={{ backgroundColor: loading ? "#0086c9" : "#0086c9" }}
               onPress={handleSignIn}
               disabled={loading}
             >
@@ -103,11 +105,11 @@ export default function SignInScreen() {
             <Text className="text-blue-700 mb-4">
               We've sent a magic link to {email}
             </Text>
-            <Text className="text-sm text-blue-600 mb-4">
+            <Text className="text-sm mb-4" style={{ color: "#0086c9" }}>
               Click the link in your email to sign in. For demo purposes, you'll
               be automatically signed in shortly.
             </Text>
-            <ActivityIndicator size="large" color="#2563eb" />
+            <ActivityIndicator size="large" color="#0086c9" />
           </View>
         )}
       </View>
