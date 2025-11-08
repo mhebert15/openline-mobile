@@ -23,7 +23,7 @@ export default function MessagesLayout() {
       <Stack.Screen
         name="message-detail"
         options={({ route }) => ({
-          headerTitle: (route.params as any)?.recipientName || "Message",
+          headerTitle: (route.params as any)?.officeName || "Message",
         })}
       />
     </Stack>

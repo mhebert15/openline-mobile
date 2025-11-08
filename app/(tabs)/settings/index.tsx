@@ -63,7 +63,7 @@ function SettingsScreen() {
         />
         <SettingsItem
           icon={<BellIcon size={24} color="#6b7280" />}
-          title="Notifications"
+          title="Notification Settings"
           onPress={() =>
             Alert.alert("Coming Soon", "Notification settings coming soon!")
           }

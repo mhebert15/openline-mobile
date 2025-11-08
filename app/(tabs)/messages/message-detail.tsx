@@ -18,13 +18,15 @@ import { format } from "date-fns";
 import { SendIcon } from "lucide-react-native";
 
 export default function MessageDetailScreen() {
-  const { officeId, recipientId, recipientName } = useLocalSearchParams<{
-    officeId: string;
-    recipientId: string;
-    recipientName: string;
-  }>();
+  const { officeId, participantIds, primaryParticipantId } =
+    useLocalSearchParams<{
+      officeId: string;
+      officeName?: string;
+      participantIds?: string;
+      participantNames?: string;
+      primaryParticipantId?: string;
+    }>();
   const { user } = useAuth();
-  const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,17 +35,15 @@ export default function MessageDetailScreen() {
 
   useEffect(() => {
     loadConversation();
-  }, [officeId, recipientId, user]);
+  }, [officeId, user]);
 
   const loadConversation = () => {
-    if (!user || !officeId || !recipientId) return;
+    if (!user || !officeId) return;
 
     // Filter messages for this specific conversation
     const conversationMessages = mockMessages.filter(
       (msg) =>
-        msg.office_id === officeId &&
-        ((msg.sender_id === user.id && msg.recipient_id === recipientId) ||
-          (msg.sender_id === recipientId && msg.recipient_id === user.id))
+        msg.office_id === officeId && msg.participant_ids.includes(user.id)
     );
 
     // Sort by created_at ascending (oldest first)
@@ -62,15 +62,21 @@ export default function MessageDetailScreen() {
   };
 
   const handleSend = async () => {
-    if (!messageText.trim() || !user || !recipientId || !officeId) return;
+    const trimmed = messageText.trim();
+    const targetParticipantId =
+      primaryParticipantId || participantIds?.split(",").filter(Boolean)[0];
+
+    if (!trimmed || !user || !officeId || !targetParticipantId) {
+      return;
+    }
 
     setSending(true);
     try {
       await mockMessagesService.sendMessage(
-        recipientId,
+        targetParticipantId,
         officeId,
         "Re: Conversation",
-        messageText.trim()
+        trimmed
       );
 
       setMessageText("");
@@ -132,7 +138,14 @@ export default function MessageDetailScreen() {
           </View>
         ) : (
           messages.map((message, index) => {
-            const isSentByMe = message.sender_id === user?.id;
+            const isSentByMe = message.author_id === user?.id;
+            const senderName = isSentByMe
+              ? "You"
+              : message.author?.full_name ||
+                message.participants?.find(
+                  (participant) => participant.id === message.author_id
+                )?.full_name ||
+                "Unknown sender";
             const showTimestamp =
               index === 0 ||
               new Date(message.created_at).getTime() -
@@ -146,6 +159,16 @@ export default function MessageDetailScreen() {
                     {formatMessageTime(message.created_at)}
                   </Text>
                 )}
+                <View
+                  className={`text-xs text-gray-500 mb-1 flex-row ${
+                    isSentByMe ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <Text className="text-xs text-gray-500 mb-1">
+                    {senderName}
+                  </Text>
+                </View>
+
                 <View
                   className={`flex-row ${
                     isSentByMe ? "justify-end" : "justify-start"
@@ -178,8 +201,8 @@ export default function MessageDetailScreen() {
       <View className="bg-white border-t border-gray-200 px-4 py-3">
         <View className="flex-row items-center">
           <TextInput
-            className="flex-1 bg-gray-100 rounded-full px-4 py-3 text-base text-gray-900 mr-2"
-            placeholder="iMessage"
+            className="flex-1 bg-gray-100 rounded-full px-4 py-4 text-gray-900 mr-2"
+            placeholder="Type a message..."
             placeholderTextColor="#9ca3af"
             value={messageText}
             onChangeText={setMessageText}

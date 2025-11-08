@@ -24,6 +24,8 @@ export const mockOffices: MedicalOffice[] = [
     longitude: -122.4194,
     created_at: new Date('2024-01-01').toISOString(),
     admin_user_id: 'admin-1',
+    image_url:
+      'https://images.unsplash.com/photo-1580281780460-82d277b0df66?auto=format&fit=crop&w=900&q=80',
     practitioners: [
       {
         id: 'prac-1',
@@ -69,6 +71,8 @@ export const mockOffices: MedicalOffice[] = [
     longitude: -122.4148,
     created_at: new Date('2024-01-01').toISOString(),
     admin_user_id: 'admin-2',
+    image_url:
+      'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=900&q=80',
     practitioners: [
       {
         id: 'prac-4',
@@ -108,6 +112,8 @@ export const mockOffices: MedicalOffice[] = [
     longitude: -122.4094,
     created_at: new Date('2024-01-01').toISOString(),
     admin_user_id: 'admin-1',
+    image_url:
+      'https://images.unsplash.com/photo-1586773860418-d37222d8fce3?auto=format&fit=crop&w=900&q=80',
     practitioners: [
       {
         id: 'prac-6',
@@ -153,6 +159,8 @@ export const mockOffices: MedicalOffice[] = [
     longitude: -122.4844,
     created_at: new Date('2024-01-01').toISOString(),
     admin_user_id: 'admin-2',
+    image_url:
+      'https://images.unsplash.com/photo-1504439904031-93ded9f93e2b?auto=format&fit=crop&w=900&q=80',
     practitioners: [
       {
         id: 'prac-9',
@@ -263,44 +271,58 @@ export const mockAdminUsers: User[] = [
     created_at: new Date('2024-01-01').toISOString(),
     updated_at: new Date('2024-01-01').toISOString(),
   },
+  {
+    id: 'admin-3',
+    email: 'admin@harborhealth.com',
+    full_name: 'Matt Karas',
+    role: 'admin',
+    created_at: new Date('2024-01-01').toISOString(),
+    updated_at: new Date('2024-01-01').toISOString(),
+  },
 ];
 
 // Mock messages
 export const mockMessages: Message[] = [
   {
     id: 'message-1',
-    sender_id: 'admin-1',
-    recipient_id: 'user-1',
+    author_id: 'admin-1',
+    participant_ids: ['admin-1', 'user-1'],
     office_id: 'office-1',
     subject: 'Meeting Confirmation',
-    content: 'Your meeting on November 5th at 10:00 AM has been confirmed. Please arrive 10 minutes early.',
+    content:
+      'Your meeting on November 5th at 10:00 AM has been confirmed. Please arrive 10 minutes early.',
     read: false,
     created_at: new Date('2024-11-03T08:30:00').toISOString(),
-    sender: mockAdminUsers[0],
+    author: mockAdminUsers[0],
+    participants: [mockAdminUsers[0], mockCurrentUser],
     office: mockOffices[0],
   },
   {
     id: 'message-2',
-    sender_id: 'user-1',
-    recipient_id: 'admin-2',
+    author_id: 'user-1',
+    participant_ids: ['user-1', 'admin-2'],
     office_id: 'office-2',
     subject: 'Rescheduling Request',
-    content: 'Would it be possible to reschedule our November 6th meeting to the following week?',
+    content:
+      'Would it be possible to reschedule our November 6th meeting to the following week?',
     read: true,
     created_at: new Date('2024-11-02T14:20:00').toISOString(),
-    sender: mockCurrentUser,
+    author: mockCurrentUser,
+    participants: [mockCurrentUser, mockAdminUsers[1]],
     office: mockOffices[1],
   },
   {
     id: 'message-3',
-    sender_id: 'admin-2',
-    recipient_id: 'user-1',
+    author_id: 'admin-3',
+    participant_ids: ['admin-3', 'user-1'],
     office_id: 'office-2',
     subject: 'Re: Rescheduling Request',
-    content: 'Yes, we can accommodate that. Please check available time slots and let me know your preference.',
+    content:
+      'Yes, we can accommodate that. Please check available time slots and let me know your preference.',
     read: false,
     created_at: new Date('2024-11-02T15:45:00').toISOString(),
-    sender: mockAdminUsers[1],
+    author: mockAdminUsers[2],
+    participants: [mockAdminUsers[2], mockCurrentUser],
     office: mockOffices[1],
   },
 ];

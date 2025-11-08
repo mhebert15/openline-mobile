@@ -37,6 +37,21 @@ function MessagesScreen() {
     }
   }, [user, cache.messages.messages.data, prefetchTabData]);
 
+  const getOtherParticipants = (message: Message) => {
+    const participants = message.participants || [];
+    const others = participants.filter(
+      (participant) => participant.id !== user?.id
+    );
+
+    if (others.length === 0 && message.other_participant) {
+      if (message.other_participant.id !== user?.id) {
+        return [message.other_participant];
+      }
+    }
+
+    return others;
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     invalidateTab("messages");
@@ -50,24 +65,34 @@ function MessagesScreen() {
   };
 
   const handleMessagePress = async (message: Message) => {
-    // Mark as read if recipient
-    if (message.recipient_id === user?.id && !message.read) {
+    const otherParticipants = getOtherParticipants(message);
+    const primaryParticipant =
+      otherParticipants[0] || message.other_participant;
+
+    if (!primaryParticipant) {
+      return;
+    }
+
+    const isUnread = message.author_id !== user?.id && !message.read;
+    if (isUnread) {
       await mockMessagesService.markAsRead(message.id);
       // Refresh messages after marking as read
       await prefetchTabData("messages");
     }
-
-    // Determine the other person in the conversation
-    const isRecipient = message.recipient_id === user?.id;
-    const otherPerson = isRecipient ? message.sender : message.recipient;
 
     // Navigate to message detail with conversation params
     router.push({
       pathname: "/(tabs)/messages/message-detail",
       params: {
         officeId: message.office_id,
-        recipientId: otherPerson?.id || "",
-        recipientName: otherPerson?.full_name || "Unknown",
+        officeName: message.office?.name || "Message",
+        participantIds: otherParticipants
+          .map((participant) => participant.id)
+          .join(","),
+        participantNames: otherParticipants
+          .map((participant) => participant.full_name)
+          .join(", "),
+        primaryParticipantId: primaryParticipant.id,
       },
     });
   };
@@ -106,19 +131,27 @@ function MessagesScreen() {
             </View>
           ) : (
             messages.map((message) => {
-              const isRecipient = message.recipient_id === user?.id;
-              const otherPerson = isRecipient
-                ? message.sender
-                : message.recipient;
+              const otherParticipants = getOtherParticipants(message);
+              const otherNames =
+                otherParticipants.length > 0
+                  ? otherParticipants
+                      .map((participant) => participant.full_name)
+                      .join(", ")
+                  : "You";
+              const hasOtherParticipants = otherParticipants.length > 0;
+              const officeName = hasOtherParticipants
+                ? message.office?.name || "Unknown Office"
+                : "You";
+              const isUnread = message.author_id !== user?.id && !message.read;
 
               return (
                 <TouchableOpacity
                   key={message.id}
                   className={`bg-white rounded-xl p-4 mb-3 shadow-sm ${
-                    isRecipient && !message.read ? "border-l-4" : ""
+                    isUnread ? "border-l-4" : ""
                   }
                   style={
-                    isRecipient && !message.read
+                    isUnread
                       ? { borderLeftColor: "#0086c9" }
                       : undefined
                   }`}
@@ -127,13 +160,10 @@ function MessagesScreen() {
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="flex-1">
                       <Text className="text-lg font-semibold text-gray-900">
-                        {message.subject}
-                      </Text>
-                      <Text className="text-sm text-gray-600 mt-1">
-                        {isRecipient ? "From" : "To"}: {otherPerson?.full_name}
+                        {officeName}
                       </Text>
                     </View>
-                    {isRecipient && !message.read && (
+                    {isUnread && (
                       <View
                         className="rounded-full w-2 h-2 mt-2"
                         style={{ backgroundColor: "#0086c9" }}
@@ -146,9 +176,7 @@ function MessagesScreen() {
                   </Text>
 
                   <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">
-                      {message.office?.name}
-                    </Text>
+                    <Text className="text-sm text-gray-500">{otherNames}</Text>
                     <Text className="text-sm text-gray-500">
                       {format(new Date(message.created_at), "MMM d, h:mm a")}
                     </Text>

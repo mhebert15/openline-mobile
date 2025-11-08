@@ -8,10 +8,8 @@ describe('Messages Service', () => {
 
     expect(Array.isArray(messages)).toBe(true);
     messages.forEach((message) => {
-      expect(
-        message.sender_id === mockCurrentUser.id ||
-          message.recipient_id === mockCurrentUser.id
-      ).toBe(true);
+      expect(message.participant_ids).toContain(mockCurrentUser.id);
+      expect(message.other_participant_id).toBeDefined();
     });
   });
 
@@ -23,21 +21,23 @@ describe('Messages Service', () => {
   });
 
   it('should send a message', async () => {
-    const recipientId = 'admin-1';
+    const participantId = 'admin-1';
     const officeId = 'office-1';
     const subject = 'Test Subject';
     const content = 'Test message content';
 
     const message = await mockMessagesService.sendMessage(
-      recipientId,
+      participantId,
       officeId,
       subject,
       content
     );
 
     expect(message).toBeDefined();
-    expect(message.sender_id).toBe(mockCurrentUser.id);
-    expect(message.recipient_id).toBe(recipientId);
+    expect(message.author_id).toBe(mockCurrentUser.id);
+    expect(message.participant_ids).toContain(mockCurrentUser.id);
+    expect(message.participant_ids).toContain(participantId);
+    expect(message.other_participant_id).toBe(participantId);
     expect(message.office_id).toBe(officeId);
     expect(message.subject).toBe(subject);
     expect(message.content).toBe(content);

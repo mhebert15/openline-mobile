@@ -10,7 +10,6 @@ import {
   CalendarIcon,
   UtensilsIcon,
   MessageSquareIcon,
-  ChevronRightIcon,
   ClockIcon,
 } from "lucide-react-native";
 
@@ -43,8 +42,8 @@ export default function LocationDetailScreen() {
       params: {
         officeId: location.id,
         officeName: location.name,
-        recipientId: adminUser.id,
-        recipientName: adminUser.full_name,
+        participantId: adminUser.id,
+        participantName: adminUser.full_name,
       },
     });
   };

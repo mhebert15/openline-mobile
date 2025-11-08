@@ -354,8 +354,8 @@ CREATE TABLE public.meetings (
 -- Messages table
 CREATE TABLE public.messages (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  sender_id UUID REFERENCES public.users NOT NULL,
-  recipient_id UUID REFERENCES public.users NOT NULL,
+  author_id UUID REFERENCES public.users NOT NULL,
+  participant_ids UUID[] NOT NULL,
   office_id UUID REFERENCES public.medical_offices NOT NULL,
   subject TEXT NOT NULL,
   content TEXT NOT NULL,

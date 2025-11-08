@@ -11,6 +11,38 @@ import {
 // Simulate async API calls with delays
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const resolveUserById = (id: string): User | undefined => {
+  if (id === mockCurrentUser.id) {
+    return mockCurrentUser;
+  }
+
+  return mockAdminUsers.find((admin) => admin.id === id);
+};
+
+const hydrateMessageForUser = (message: Message, userId: string): Message => {
+  const participants: User[] =
+    message.participants && message.participants.length > 0
+      ? message.participants
+      : message.participant_ids
+          .map((participantId) => resolveUserById(participantId))
+          .filter((participant): participant is User => Boolean(participant));
+
+  const otherParticipantId =
+    message.participant_ids.find((participantId) => participantId !== userId) ||
+    userId;
+
+  const otherParticipant =
+    participants?.find((participant) => participant.id === otherParticipantId) ||
+    resolveUserById(otherParticipantId);
+
+  return {
+    ...message,
+    participants,
+    other_participant_id: otherParticipant?.id,
+    other_participant: otherParticipant,
+  };
+};
+
 export const mockAuthService = {
   async sendMagicLink(email: string): Promise<{ success: boolean; message: string }> {
     await delay(1000);
@@ -100,39 +132,51 @@ export const mockOfficesService = {
 export const mockMessagesService = {
   async getMessages(userId: string): Promise<Message[]> {
     await delay(900);
-    return mockMessages.filter(
-      (message) => message.sender_id === userId || message.recipient_id === userId
-    );
+    return mockMessages
+      .filter((message) => message.participant_ids.includes(userId))
+      .map((message) => hydrateMessageForUser(message, userId));
   },
 
   async getUnreadCount(userId: string): Promise<number> {
     await delay(500);
-    return mockMessages.filter((message) => message.recipient_id === userId && !message.read)
-      .length;
+    return mockMessages.filter(
+      (message) =>
+        message.participant_ids.includes(userId) &&
+        message.author_id !== userId &&
+        !message.read
+    ).length;
   },
 
   async sendMessage(
-    recipientId: string,
+    participantId: string,
     officeId: string,
     subject: string,
     content: string
   ): Promise<Message> {
     await delay(1000);
     const office = mockOffices.find((o) => o.id === officeId);
+    const recipient =
+      mockAdminUsers.find((admin) => admin.id === participantId) ||
+      (participantId === mockCurrentUser.id ? mockCurrentUser : undefined);
+    const participants = [mockCurrentUser];
+    if (recipient) {
+      participants.push(recipient);
+    }
     const newMessage: Message = {
       id: `message-${Date.now()}`,
-      sender_id: mockCurrentUser.id,
-      recipient_id: recipientId,
+      author_id: mockCurrentUser.id,
+      participant_ids: [mockCurrentUser.id, participantId],
       office_id: officeId,
       subject,
       content,
       read: false,
       created_at: new Date().toISOString(),
-      sender: mockCurrentUser,
+      author: mockCurrentUser,
+      participants,
       office,
     };
     mockMessages.push(newMessage);
-    return newMessage;
+    return hydrateMessageForUser(newMessage, mockCurrentUser.id);
   },
 
   async markAsRead(messageId: string): Promise<void> {

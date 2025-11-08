@@ -5,13 +5,25 @@ import {
   MessageCircleIcon,
   SettingsIcon,
   MapPinIcon,
+  BellIcon,
 } from "lucide-react-native";
-import { Platform } from "react-native";
+import { Platform, Pressable, type PressableProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabAnimationProvider } from "@/components/TabAnimationContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import React from "react";
+
+const LargeHitTabButton = (props: PressableProps) => (
+  <Pressable
+    {...props}
+    style={(state) => [
+      typeof props.style === "function" ? props.style(state) : props.style,
+      { paddingHorizontal: 12, paddingVertical: 8 },
+    ]}
+    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+  />
+);
 
 function TabsContent() {
   const insets = useSafeAreaInsets();
@@ -37,9 +49,9 @@ function TabsContent() {
   // iOS: 48pt + safe area bottom, Android: 48dp
   const tabBarHeight =
     Platform.select({
-      ios: 28 + insets.bottom,
-      android: 28,
-    }) ?? 28;
+      ios: 48 + insets.bottom,
+      android: 48,
+    }) ?? 48;
 
   return (
     <Tabs
@@ -85,6 +97,7 @@ function TabsContent() {
         options={{
           title: "",
           headerShown: false, // Hide navigation header
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
             <HomeIcon color={color} size={size} />
           ),
@@ -95,6 +108,7 @@ function TabsContent() {
         options={{
           title: "",
           headerShown: false,
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
             <CalendarIcon color={color} size={size} />
           ),
@@ -105,6 +119,7 @@ function TabsContent() {
         options={{
           title: "",
           headerShown: false, // Hide tab header - Stack navigator handles it
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
             <MapPinIcon color={color} size={size} />
           ),
@@ -115,8 +130,20 @@ function TabsContent() {
         options={{
           title: "",
           headerShown: false, // Hide tab header - Stack navigator handles it
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
             <MessageCircleIcon color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "",
+          headerShown: false,
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
+          tabBarIcon: ({ color, size }) => (
+            <BellIcon color={color} size={size} />
           ),
         }}
       />
@@ -125,6 +152,7 @@ function TabsContent() {
         options={{
           title: "",
           headerShown: false,
+          tabBarButton: (props) => <LargeHitTabButton {...props} />,
           tabBarIcon: ({ color, size }) => (
             <SettingsIcon color={color} size={size} />
           ),

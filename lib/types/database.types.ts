@@ -45,6 +45,7 @@ export interface MedicalOffice {
   preferred_meeting_times?: PreferredMeetingTimes;
   food_preferences?: FoodPreferences;
   admin_user_id?: string;
+  image_url?: string;
 }
 
 export interface Meeting {
@@ -62,16 +63,18 @@ export interface Meeting {
 
 export interface Message {
   id: string;
-  sender_id: string;
-  recipient_id: string;
+  author_id: string;
+  participant_ids: string[];
   office_id: string;
   subject: string;
   content: string;
   read: boolean;
   created_at: string;
-  sender?: User;
-  recipient?: User;
+  author?: User;
+  participants?: User[];
   office?: MedicalOffice;
+  other_participant_id?: string;
+  other_participant?: User;
 }
 
 export interface TimeSlot {
