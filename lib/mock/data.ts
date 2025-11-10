@@ -24,8 +24,7 @@ export const mockOffices: MedicalOffice[] = [
     longitude: -122.4194,
     created_at: new Date('2024-01-01').toISOString(),
     admin_user_id: 'admin-1',
-    image_url:
-      'https://images.unsplash.com/photo-1580281780460-82d277b0df66?auto=format&fit=crop&w=900&q=80',
+    image_url: "",
     practitioners: [
       {
         id: 'prac-1',

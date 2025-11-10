@@ -23,7 +23,8 @@ export const TAB_ORDER: Record<string, number> = {
   calendar: 1,
   locations: 2,
   messages: 3,
-  settings: 4,
+  notifications: 4,
+  settings: 5,
 };
 
 const TabAnimationContextDefault: TabAnimationContextType = {

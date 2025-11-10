@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useLayoutEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { mockOffices, mockAdminUsers } from "@/lib/mock/data";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
+import { mockOffices, mockAdminUsers, mockMessages } from "@/lib/mock/data";
 import type { MedicalOffice } from "@/lib/types/database.types";
 import {
   MapPinIcon,
@@ -12,10 +12,13 @@ import {
   MessageSquareIcon,
   ClockIcon,
 } from "lucide-react-native";
+import { useAuth } from "@/lib/contexts/AuthContext";
 
 export default function LocationDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
+  const { user } = useAuth();
   const [location, setLocation] = useState<MedicalOffice | null>(
     mockOffices.find((office) => office.id === id) || null
   );
@@ -32,11 +35,54 @@ export default function LocationDetailScreen() {
     (admin) => admin.id === location.admin_user_id
   );
 
-  const handleSendMessage = () => {
+  const handleSendMessage = useCallback(() => {
+    if (!location) return;
+
+    const existingMessage = mockMessages.find((message) => {
+      if (message.office_id !== location.id) return false;
+      if (!user) return true;
+      return message.participant_ids.includes(user.id);
+    });
+
+    if (existingMessage) {
+      const participants = existingMessage.participants || [];
+      const otherParticipants = participants.filter(
+        (participant) => participant.id !== user?.id
+      );
+
+      if (otherParticipants.length === 0 && existingMessage.other_participant) {
+        if (existingMessage.other_participant.id !== user?.id) {
+          otherParticipants.push(existingMessage.other_participant);
+        }
+      }
+
+      const participantIds = otherParticipants.map((p) => p.id).join(",");
+      const participantNames = otherParticipants
+        .map((p) => p.full_name)
+        .join(", ");
+      const primaryParticipantId =
+        otherParticipants[0]?.id || existingMessage.other_participant_id || "";
+
+      router.push({
+        pathname: "/(tabs)/messages/message-detail",
+        params: {
+          officeId: existingMessage.office_id,
+          officeName: location.name,
+          participantIds,
+          participantNames,
+          primaryParticipantId,
+          fromLocation: "true",
+          locationId: location.id,
+        },
+      });
+      return;
+    }
+
     if (!adminUser) {
       Alert.alert("Error", "Admin contact not available");
       return;
     }
+
     router.push({
       pathname: "/compose-message",
       params: {
@@ -44,9 +90,25 @@ export default function LocationDetailScreen() {
         officeName: location.name,
         participantId: adminUser.id,
         participantName: adminUser.full_name,
+        fromLocation: "true",
+        locationId: location.id,
       },
     });
-  };
+  }, [adminUser, location, router, user]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={handleSendMessage}
+          className="mr-2"
+          style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+        >
+          <MessageSquareIcon size={20} color="#0086c9" />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, handleSendMessage]);
 
   const handleBookMeeting = () => {
     router.push("/(tabs)/calendar");
@@ -233,20 +295,6 @@ export default function LocationDetailScreen() {
           <CalendarIcon size={20} color="white" />
           <Text className="text-white font-semibold text-lg ml-2">
             Book Meeting
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-white border-2 rounded-xl p-4 flex-row items-center justify-center"
-          style={{ borderColor: "#0086c9" }}
-          onPress={handleSendMessage}
-        >
-          <MessageSquareIcon size={20} color="#0086c9" />
-          <Text
-            className="font-semibold text-lg ml-2"
-            style={{ color: "#0086c9" }}
-          >
-            Send Message
           </Text>
         </TouchableOpacity>
       </View>

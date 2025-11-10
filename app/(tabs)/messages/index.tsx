@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -15,12 +15,15 @@ import type { Message } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
+import { mockAdminUsers, mockMessages, mockCurrentUser } from "@/lib/mock/data";
+import { useComposeSheet } from "../composeSheetContext";
 
 function MessagesScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
+  const { openComposeSheet } = useComposeSheet();
 
   // Get data from cache
   const messages = (cache.messages.messages.data as Message[]) || [];
@@ -75,9 +78,12 @@ function MessagesScreen() {
 
     const isUnread = message.author_id !== user?.id && !message.read;
     if (isUnread) {
-      await mockMessagesService.markAsRead(message.id);
-      // Refresh messages after marking as read
-      await prefetchTabData("messages");
+      mockMessagesService
+        .markAsRead(message.id)
+        .catch((error) => console.error("Error marking message read:", error));
+      prefetchTabData("messages").catch((error) =>
+        console.error("Error prefetching messages:", error)
+      );
     }
 
     // Navigate to message detail with conversation params
@@ -96,6 +102,18 @@ function MessagesScreen() {
       },
     });
   };
+
+  const existingConversationParticipantIds = useMemo(() => {
+    const ids = new Set<string>();
+    messages.forEach((message) => {
+      message.participant_ids.forEach((id) => {
+        if (id !== user?.id) {
+          ids.add(id);
+        }
+      });
+    });
+    return ids;
+  }, [messages, user?.id]);
 
   if (loading) {
     return (
@@ -120,10 +138,7 @@ function MessagesScreen() {
               <Text className="text-gray-500 mt-4 text-center">
                 No messages yet
               </Text>
-              <TouchableOpacity
-                className="mt-4"
-                onPress={() => router.push("/compose-message")}
-              >
+              <TouchableOpacity className="mt-4" onPress={openComposeSheet}>
                 <Text className="font-semibold" style={{ color: "#0086c9" }}>
                   Send your first message
                 </Text>
@@ -192,7 +207,7 @@ function MessagesScreen() {
       <TouchableOpacity
         className="absolute bottom-6 right-6 rounded-full w-14 h-14 items-center justify-center shadow-lg"
         style={{ backgroundColor: "#0086c9" }}
-        onPress={() => router.push("/compose-message")}
+        onPress={openComposeSheet}
       >
         <PlusIcon size={28} color="white" />
       </TouchableOpacity>
