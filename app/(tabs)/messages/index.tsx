@@ -16,7 +16,7 @@ import { format } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 import { mockAdminUsers, mockMessages, mockCurrentUser } from "@/lib/mock/data";
-import { useComposeSheet } from "../composeSheetContext";
+import { useComposeSheet } from "@/lib/contexts/ComposeSheetContext";
 
 function MessagesScreen() {
   const { user } = useAuth();

@@ -80,6 +80,8 @@ export interface Message {
 export interface TimeSlot {
   time: string;
   available: boolean;
+  preferred?: boolean;
+  clinicianCount?: number;
 }
 
 export interface AvailableSlot {

@@ -163,7 +163,7 @@ Shows:
 - List of upcoming appointments with details
 - Quick access to book new meetings
 
-**Location**: `app/(tabs)/index.tsx`
+**Location**: `app/(tabs)/(dashboard)/index.tsx`
 
 ### Booking
 

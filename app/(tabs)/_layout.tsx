@@ -30,10 +30,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mockAdminUsers, mockOffices } from "@/lib/mock/data";
 import type { User, Message } from "@/lib/types/database.types";
 import { mockMessagesService } from "@/lib/mock/services";
-import { ComposeSheetProvider } from "./composeSheetContext";
+import { ComposeSheetProvider } from "@/lib/contexts/ComposeSheetContext";
 
 const TAB_ROUTE_MAP: Record<string, string> = {
-  index: "/(tabs)",
+  dashboard: "/(tabs)/(dashboard)",
   calendar: "/(tabs)/calendar",
   locations: "/(tabs)/locations",
   messages: "/(tabs)/messages",
@@ -293,11 +293,13 @@ function TabsContent() {
           }}
         >
           <Tabs.Screen
-            name="index"
+            name="(dashboard)"
             options={{
               title: "",
-              headerShown: false, // Hide navigation header
-              tabBarButton: (props) => <LargeHitTabButton {...props} />,
+              headerShown: false,
+              tabBarButton: (props) => (
+                <LargeHitTabButton {...props} tabRouteSegment="dashboard" />
+              ),
               tabBarIcon: ({ color, size }) => (
                 <HomeIcon color={color} size={size} />
               ),

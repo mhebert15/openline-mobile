@@ -19,13 +19,19 @@ interface TabAnimationContextType {
 
 // Tab order mapping for direction detection
 export const TAB_ORDER: Record<string, number> = {
-  index: 0,
+  "(dashboard)": 0,
   calendar: 1,
   locations: 2,
   messages: 3,
   notifications: 4,
   settings: 5,
 };
+
+type TabRouteKey = keyof typeof TAB_ORDER;
+
+function isTabRouteKey(value: string): value is TabRouteKey {
+  return Object.prototype.hasOwnProperty.call(TAB_ORDER, value);
+}
 
 const TabAnimationContextDefault: TabAnimationContextType = {
   direction: null,
@@ -45,6 +51,7 @@ export function TabAnimationProvider({
 }) {
   const navigation = useNavigation();
   const segments = useSegments();
+  const rawSegments = segments as unknown as string[];
   const [direction, setDirection] = useState<TabDirection>(null);
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const [tabDirections, setTabDirections] = useState<
@@ -55,16 +62,19 @@ export function TabAnimationProvider({
   // Get current tab route name from segments
   // segments will be like ["(tabs)", "index"] or ["(tabs)", "locations", "index"]
   // We want the segment after "(tabs)" which is the tab name
-  let currentTabRouteName: string | null = null;
-  if (segments.length >= 2 && segments[0] === "(tabs)") {
-    const tabSegment = segments[1];
-    // Only use it if it's in TAB_ORDER (valid tab)
-    if (tabSegment && TAB_ORDER[tabSegment] !== undefined) {
-      currentTabRouteName = tabSegment;
+  let currentTabRouteName: TabRouteKey | null = null;
+  if (rawSegments.length > 0 && rawSegments[0] === "(tabs)") {
+    for (let i = 1; i < rawSegments.length; i += 1) {
+      const candidate = rawSegments[i];
+      if (candidate && isTabRouteKey(candidate)) {
+        currentTabRouteName = candidate;
+        break;
+      }
     }
-  } else if (segments.length === 1 && segments[0] === "(tabs)") {
-    // If we're at the root of tabs, default to "index" (dashboard)
-    currentTabRouteName = "index";
+
+    if (!currentTabRouteName) {
+      currentTabRouteName = "(dashboard)";
+    }
   }
 
   useEffect(() => {
