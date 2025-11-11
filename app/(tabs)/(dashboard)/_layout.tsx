@@ -45,6 +45,13 @@ export default function DashboardLayout() {
           ),
         }}
       />
+      <Stack.Screen
+        name="book-meeting"
+        options={{
+          headerTitle: "Book a meeting",
+          headerBackTitle: "Back",
+        }}
+      />
     </Stack>
   );
 }

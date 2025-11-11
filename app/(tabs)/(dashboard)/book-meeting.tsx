@@ -193,7 +193,7 @@ export default function BookMeetingScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50 pt-6">
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
@@ -291,7 +291,7 @@ export default function BookMeetingScreen() {
                     setSelectedDateIndex(index);
                     setSelectedTime(null);
                   }}
-                  className={`mr-3 mb-2 items-center rounded-2xl px-4 py-3 border ${
+                  className={`mr-3 mb-2 bg-white items-center rounded-2xl px-4 py-3 border shadow-sm ${
                     isSelected ? "border-[#0086c9]" : "bg-white border-gray-200"
                   }`}
                   style={{ minWidth: 88 }}
@@ -399,9 +399,9 @@ export default function BookMeetingScreen() {
                   activeOpacity={0.8}
                   disabled={disabled}
                   onPress={() => setSelectedTime(slot.time)}
-                  className={`mb-2 rounded-2xl px-4 py-3 flex-row items-center justify-between border ${
+                  className={`mb-2 rounded-2xl bg-white px-4 py-3 flex-row items-center justify-between border shadow-sm ${
                     isSelected
-                      ? "bg-[#0086c9] border-[#0086c9]"
+                      ? "border-[#0086c9]"
                       : disabled
                       ? "bg-gray-100 border-gray-100"
                       : "bg-white border-gray-200"
@@ -410,22 +410,14 @@ export default function BookMeetingScreen() {
                   <View>
                     <Text
                       className={`text-base font-semibold ${
-                        isSelected
-                          ? "text-white"
-                          : disabled
-                          ? "text-gray-400"
-                          : "text-gray-900"
+                        disabled ? "text-gray-400" : "text-gray-900"
                       }`}
                     >
                       {formatTimeLabel(slot.time)}
                     </Text>
                     <Text
                       className={`text-xs mt-1 ${
-                        isSelected
-                          ? "text-white/80"
-                          : disabled
-                          ? "text-gray-400"
-                          : "text-gray-500"
+                        disabled ? "text-gray-400" : "text-gray-500"
                       }`}
                     >
                       {clinicianCount} clinician
@@ -434,9 +426,7 @@ export default function BookMeetingScreen() {
                   </View>
                   <ClockIcon
                     size={18}
-                    color={
-                      isSelected ? "white" : disabled ? "#9ca3af" : "#0086c9"
-                    }
+                    color={disabled ? "#9ca3af" : "#0086c9"}
                   />
                 </TouchableOpacity>
               );
@@ -473,9 +463,9 @@ export default function BookMeetingScreen() {
                   activeOpacity={0.8}
                   disabled={disabled}
                   onPress={() => setSelectedTime(slot.time)}
-                  className={`mb-2 rounded-2xl px-4 py-3 flex-row items-center justify-between border ${
+                  className={`mb-2 rounded-2xl bg-white px-4 py-3 flex-row items-center justify-between border shadow-sm ${
                     isSelected
-                      ? "bg-[#0086c9] border-[#0086c9]"
+                      ? "border-[#0086c9]"
                       : disabled
                       ? "bg-gray-100 border-gray-100"
                       : "bg-white border-gray-200"
@@ -484,22 +474,14 @@ export default function BookMeetingScreen() {
                   <View>
                     <Text
                       className={`text-base font-semibold ${
-                        isSelected
-                          ? "text-white"
-                          : disabled
-                          ? "text-gray-400"
-                          : "text-gray-900"
+                        disabled ? "text-gray-400" : "text-gray-900"
                       }`}
                     >
                       {formatTimeLabel(slot.time)}
                     </Text>
                     <Text
                       className={`text-xs mt-1 ${
-                        isSelected
-                          ? "text-white/80"
-                          : disabled
-                          ? "text-gray-400"
-                          : "text-gray-500"
+                        disabled ? "text-gray-400" : "text-gray-500"
                       }`}
                     >
                       {clinicianCount} clinician
@@ -508,9 +490,7 @@ export default function BookMeetingScreen() {
                   </View>
                   <ClockIcon
                     size={18}
-                    color={
-                      isSelected ? "white" : disabled ? "#9ca3af" : "#94a3b8"
-                    }
+                    color={disabled ? "#9ca3af" : "#94a3b8"}
                   />
                 </TouchableOpacity>
               );
@@ -555,10 +535,7 @@ export default function BookMeetingScreen() {
         )}
       </ScrollView>
 
-      <View
-        className="absolute left-0 right-0 bottom-0 bg-white border-t border-gray-200 px-5"
-        style={{ paddingBottom: (insets.bottom || 16) + 16, paddingTop: 16 }}
-      >
+      <View className="absolute left-0 right-0 bottom-0 bg-white border-t border-gray-200 p-5">
         <TouchableOpacity
           disabled={
             !selectedLocation || !selectedDate || !selectedTime || booking
