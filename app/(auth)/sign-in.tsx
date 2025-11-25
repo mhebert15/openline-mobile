@@ -67,7 +67,7 @@ export default function SignInScreen() {
                 Email Address
               </Text>
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-gray-200 rounded-md px-4 py-4 flex-row items-center"
                 placeholder="your.email@example.com"
                 value={email}
                 onChangeText={setEmail}
