@@ -72,7 +72,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/notification-icon.png",
+          "icon": "./assets/images/icon.png",
           "color": "#ffffff",
           "sounds": [
             "./assets/sounds/notification.wav"
@@ -81,7 +81,7 @@
       ]
     ],
     "notification": {
-      "icon": "./assets/images/notification-icon.png",
+      "icon": "./assets/images/icon.png",
       "color": "#0066CC",
       "androidMode": "default",
       "androidCollapsedTitle": "New message from {{participant}}"

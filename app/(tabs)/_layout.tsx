@@ -310,7 +310,8 @@ function TabsContent() {
             options={{
               title: "",
               headerShown: false,
-              tabBarButton: (props) => <LargeHitTabButton {...props} />,
+              // Temporarily hide calendar from the tab bar
+              href: null,
               tabBarIcon: ({ color, size }) => (
                 <CalendarIcon color={color} size={size} />
               ),
