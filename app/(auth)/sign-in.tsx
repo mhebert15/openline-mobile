@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,25 @@ import {
   Alert,
 } from "react-native";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useRouter } from "expo-router";
 
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [linkSent, setLinkSent] = useState(false);
-  const { signIn } = useAuth();
+  const [otpSent, setOtpSent] = useState(false);
+  const { signIn, verifyOtp, user } = useAuth();
+  const router = useRouter();
 
-  const handleSignIn = async () => {
+  // Navigate to main app when user is authenticated
+  useEffect(() => {
+    if (user) {
+      console.log("User authenticated, navigating to tabs");
+      router.replace("/(tabs)/(dashboard)");
+    }
+  }, [user, router]);
+
+  const handleSendOtp = async () => {
     if (!email) {
       Alert.alert("Error", "Please enter your email address");
       return;
@@ -33,8 +44,28 @@ export default function SignInScreen() {
     setLoading(false);
 
     if (result.success) {
-      setLinkSent(true);
+      setOtpSent(true);
     } else {
+      Alert.alert("Error", result.message);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      Alert.alert("Error", "Please enter the OTP code");
+      return;
+    }
+
+    if (otp.length !== 6) {
+      Alert.alert("Error", "OTP code must be 6 digits");
+      return;
+    }
+
+    setLoading(true);
+    const result = await verifyOtp(email, otp);
+    setLoading(false);
+
+    if (!result.success) {
       Alert.alert("Error", result.message);
     }
   };
@@ -60,7 +91,7 @@ export default function SignInScreen() {
           </Text>
         </View>
 
-        {!linkSent ? (
+        {!otpSent ? (
           <>
             <View className="mb-6">
               <Text className="text-sm font-medium text-gray-700 mb-2">
@@ -81,36 +112,80 @@ export default function SignInScreen() {
             <TouchableOpacity
               className="rounded-lg py-4"
               style={{ backgroundColor: loading ? "#0086c9" : "#0086c9" }}
-              onPress={handleSignIn}
+              onPress={handleSendOtp}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="white" />
               ) : (
                 <Text className="text-white text-center font-semibold text-base">
-                  Send Magic Link
+                  Send OTP Code
                 </Text>
               )}
             </TouchableOpacity>
 
             <Text className="text-sm text-gray-500 mt-4 text-center">
-              We'll send you a secure link to sign in without a password
+              We'll send you a 6-digit code to sign in
             </Text>
           </>
         ) : (
-          <View className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <Text className="text-xl font-semibold text-blue-900 mb-2">
-              Check your email
-            </Text>
-            <Text className="text-blue-700 mb-4">
-              We've sent a magic link to {email}
-            </Text>
-            <Text className="text-sm mb-4" style={{ color: "#0086c9" }}>
-              Click the link in your email to sign in. For demo purposes, you'll
-              be automatically signed in shortly.
-            </Text>
-            <ActivityIndicator size="large" color="#0086c9" />
-          </View>
+          <>
+            <View className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+              <Text className="text-xl font-semibold text-blue-900 mb-2">
+                Check your email
+              </Text>
+              <Text className="text-blue-700 mb-2">
+                We've sent a 6-digit code to {email}
+              </Text>
+              <Text className="text-sm text-gray-600">
+                For local development, view the email at:{"\n"}
+                http://127.0.0.1:54324
+              </Text>
+            </View>
+
+            <View className="mb-6">
+              <Text className="text-sm font-medium text-gray-700 mb-2">
+                Enter OTP Code
+              </Text>
+              <TextInput
+                className="border border-gray-200 rounded-md px-4 py-4 flex-row items-center text-center text-2xl tracking-widest"
+                placeholder="000000"
+                value={otp}
+                onChangeText={setOtp}
+                keyboardType="number-pad"
+                maxLength={6}
+                editable={!loading}
+                autoFocus
+              />
+            </View>
+
+            <TouchableOpacity
+              className="rounded-lg py-4 mb-3"
+              style={{ backgroundColor: loading ? "#0086c9" : "#0086c9" }}
+              onPress={handleVerifyOtp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white text-center font-semibold text-base">
+                  Verify Code
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setOtpSent(false);
+                setOtp("");
+              }}
+              disabled={loading}
+            >
+              <Text className="text-center text-gray-600">
+                Use a different email
+              </Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
     </KeyboardAvoidingView>

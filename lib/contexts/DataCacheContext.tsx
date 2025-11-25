@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useAuth } from "./AuthContext";
+import { supabase } from "../supabase/client";
 import {
   mockMeetingsService,
   mockOfficesService,
@@ -100,6 +101,106 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  // Helper function to fetch accessible locations for the current user
+  const fetchAccessibleLocations = useCallback(async (): Promise<
+    MedicalOffice[]
+  > => {
+    if (!user) return [];
+
+    try {
+      // Filter locations based on user access through medical_rep_locations
+      // First, get the user's medical_rep record
+      const { data: medicalRep, error: medicalRepError } = await supabase
+        .from("medical_reps")
+        .select("id")
+        .eq("profile_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (medicalRepError) {
+        console.error("Error fetching medical rep:", medicalRepError);
+      }
+
+      // Build query for locations
+      const isAdmin = user.role === "admin";
+      let locationsQuery;
+
+      // If user is not admin and has a medical_rep record, first get accessible location IDs
+      // This two-step approach avoids RLS recursion issues
+      if (!isAdmin && medicalRep && (medicalRep as { id: string }).id) {
+        const medicalRepId = (medicalRep as { id: string }).id;
+
+        // Step 1: Get location IDs that this medical rep has access to
+        const { data: repLocations, error: repLocError } = await supabase
+          .from("medical_rep_locations")
+          .select("location_id")
+          .eq("medical_rep_id", medicalRepId)
+          .eq("relationship_status", "active");
+
+        if (repLocError) {
+          console.error("Error fetching medical rep locations:", repLocError);
+          return [];
+        }
+
+        const locationIds = (repLocations || []).map((rl: any) => rl.location_id);
+
+        // Step 2: Query locations using the IDs we just fetched
+        if (locationIds.length === 0) {
+          // No accessible locations for this rep
+          return [];
+        }
+
+        locationsQuery = supabase
+          .from("locations")
+          .select(
+            "id, name, address_line1, address_line2, city, state, postal_code, phone, status, created_at"
+          )
+          .eq("status", "active")
+          .is("deleted_at", null)
+          .in("id", locationIds);
+      } else {
+        // Admin or no medical_rep record - query all locations
+        locationsQuery = supabase
+          .from("locations")
+          .select(
+            "id, name, address_line1, address_line2, city, state, postal_code, phone, status, created_at"
+          )
+          .eq("status", "active")
+          .is("deleted_at", null);
+      }
+
+      const { data: locationsData, error: locationsError } =
+        await locationsQuery.order("name", { ascending: true });
+
+      if (locationsError) {
+        console.error("Error fetching locations:", locationsError);
+        return [];
+      }
+
+      // Map database location structure to MedicalOffice type
+      const offices: MedicalOffice[] = (locationsData || []).map(
+        (loc: any) => ({
+          id: loc.id,
+          name: loc.name,
+          address: loc.address_line1 || "",
+          city: loc.city || "",
+          state: loc.state || "",
+          zip_code: loc.postal_code || "",
+          phone: loc.phone || "",
+          latitude: 0, // TODO: Add latitude/longitude to locations table if needed
+          longitude: 0,
+          created_at: loc.created_at,
+          image_url: undefined, // Locations table doesn't have image_url column
+        })
+      );
+
+      return offices;
+    } catch (error) {
+      console.error("Unexpected error fetching locations:", error);
+      return [];
+    }
+  }, [user]);
+
   const prefetchTabData = useCallback(
     async (tabName: keyof CacheData) => {
       if (!user) return;
@@ -155,7 +256,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
               const [meetings, locations] = await Promise.all([
                 mockMeetingsService.getUpcomingMeetings(user.id),
-                mockOfficesService.getAllOffices(),
+                fetchAccessibleLocations(),
               ]);
 
               updateCacheEntry(tabName, "meetings", () => ({
@@ -177,7 +278,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: true,
               }));
 
-              const offices = await mockOfficesService.getAllOffices();
+              const offices = await fetchAccessibleLocations();
 
               updateCacheEntry(tabName, "offices", () => ({
                 data: offices,
@@ -238,7 +339,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       loadingRefs.current[loadingKey] = fetchPromise;
       return fetchPromise;
     },
-    [user, updateCacheEntry]
+    [user, updateCacheEntry, fetchAccessibleLocations]
   );
 
   const invalidateTab = useCallback((tabName: keyof CacheData) => {

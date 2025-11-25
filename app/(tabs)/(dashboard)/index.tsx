@@ -27,10 +27,13 @@ function DashboardScreen() {
     (cache.dashboard.upcomingMeetings.data as Meeting[]) || [];
   const completedCount = cache.dashboard.completedCount.data || 0;
 
+  // Show loading only if data is being fetched AND we don't have data yet
+  // Once we have data (even if empty), we should show the content
   const loading =
     isLoading("dashboard") &&
-    upcomingMeetings.length === 0 &&
-    completedCount === 0;
+    (!cache.dashboard.upcomingMeetings.data ||
+      cache.dashboard.completedCount.data === null ||
+      cache.dashboard.completedCount.data === undefined);
 
   useEffect(() => {
     if (

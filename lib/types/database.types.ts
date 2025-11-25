@@ -9,11 +9,41 @@ export interface User {
   updated_at: string;
 }
 
+// Provider table structure from Supabase
+export interface Provider {
+  id: string;
+  location_id: string;
+  profile_id: string | null;
+  first_name: string;
+  last_name: string;
+  credential: string | null;
+  specialty: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Practitioner interface for UI (mapped from Provider)
 export interface Practitioner {
   id: string;
   name: string;
   title: string;
   specialty: string;
+}
+
+// Location Preferred Time Slot from Supabase
+export interface LocationPreferredTimeSlot {
+  id: string;
+  location_id: string;
+  day_of_week: number; // 0 = Monday, 1 = Tuesday, etc.
+  start_time: string; // time without time zone
+  end_time: string; // time without time zone
+  meeting_type: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PreferredMeetingTimes {
@@ -24,12 +54,44 @@ export interface PreferredMeetingTimes {
   friday: string[];
 }
 
+// Food Preferences from Supabase
+export interface FoodPreference {
+  id: string;
+  location_id: string;
+  scope: string; // 'location' | 'provider' | etc.
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FoodPreferences {
   dietary_restrictions: string[];
   favorite_foods: string[];
   dislikes: string[];
 }
 
+// Location table structure from Supabase
+export interface Location {
+  id: string;
+  company_id: string;
+  name: string;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string;
+  timezone: string | null;
+  phone: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+// MedicalOffice interface for UI (mapped from Location)
 export interface MedicalOffice {
   id: string;
   name: string;

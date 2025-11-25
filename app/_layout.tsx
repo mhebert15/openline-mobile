@@ -60,14 +60,19 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === "(auth)";
 
+    // Use setTimeout to avoid navigation loops
+    const timeoutId = setTimeout(() => {
     if (!user && !inAuthGroup) {
       // Redirect to sign-in if not authenticated
       router.replace("/(auth)/sign-in");
     } else if (user && inAuthGroup) {
       // Redirect to main app if authenticated
-      router.replace("/(tabs)");
+      router.replace("/(tabs)/(dashboard)");
     }
-  }, [user, loading, segments]);
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, [user, loading]);
 
   if (loading) {
     return (

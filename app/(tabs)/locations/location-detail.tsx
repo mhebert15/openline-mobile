@@ -1,8 +1,26 @@
-import React, { useState, useCallback, useLayoutEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import React, {
+  useState,
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+} from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
-import { mockOffices, mockAdminUsers, mockMessages } from "@/lib/mock/data";
-import type { MedicalOffice } from "@/lib/types/database.types";
+import { supabase } from "@/lib/supabase/client";
+import type {
+  MedicalOffice,
+  Practitioner,
+  PreferredMeetingTimes,
+  FoodPreferences,
+  User,
+} from "@/lib/types/database.types";
 import {
   MapPinIcon,
   PhoneIcon,
@@ -19,63 +37,320 @@ export default function LocationDetailScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const [location, setLocation] = useState<MedicalOffice | null>(
-    mockOffices.find((office) => office.id === id) || null
-  );
+  const [location, setLocation] = useState<MedicalOffice | null>(null);
+  const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!location) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <Text className="text-gray-600">Location not found</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (!id || !user) return;
+    loadLocationData();
+  }, [id, user]);
 
-  const adminUser = mockAdminUsers.find(
-    (admin) => admin.id === location.admin_user_id
-  );
+  const loadLocationData = async () => {
+    if (!id || !user) return;
 
-  const handleSendMessage = useCallback(() => {
-    if (!location) return;
+    try {
+      setLoading(true);
+      setError(null);
 
-    const existingMessage = mockMessages.find((message) => {
-      if (message.office_id !== location.id) return false;
-      if (!user) return true;
-      return message.participant_ids.includes(user.id);
-    });
+      // First, verify user has access to this location
+      const isAdmin = user.role === "admin";
+      let hasAccess = isAdmin;
 
-    if (existingMessage) {
-      const participants = existingMessage.participants || [];
-      const otherParticipants = participants.filter(
-        (participant) => participant.id !== user?.id
-      );
+      if (!isAdmin) {
+        // Check if user has access through medical_rep_locations
+        const { data: medicalRep } = await supabase
+          .from("medical_reps")
+          .select("id")
+          .eq("profile_id", user.id)
+          .eq("status", "active")
+          .maybeSingle();
 
-      if (otherParticipants.length === 0 && existingMessage.other_participant) {
-        if (existingMessage.other_participant.id !== user?.id) {
-          otherParticipants.push(existingMessage.other_participant);
+        if (medicalRep && (medicalRep as { id: string }).id) {
+          const { data: repLocation } = await supabase
+            .from("medical_rep_locations")
+            .select("location_id")
+            .eq("medical_rep_id", (medicalRep as { id: string }).id)
+            .eq("location_id", id)
+            .eq("relationship_status", "active")
+            .maybeSingle();
+
+          hasAccess = !!repLocation;
         }
       }
 
-      const participantIds = otherParticipants.map((p) => p.id).join(",");
-      const participantNames = otherParticipants
-        .map((p) => p.full_name)
-        .join(", ");
-      const primaryParticipantId =
-        otherParticipants[0]?.id || existingMessage.other_participant_id || "";
+      if (!hasAccess) {
+        setError("You don't have access to this location");
+        setLoading(false);
+        return;
+      }
 
-      router.push({
-        pathname: "/(tabs)/messages/message-detail",
-        params: {
-          officeId: existingMessage.office_id,
-          officeName: location.name,
-          participantIds,
-          participantNames,
-          primaryParticipantId,
-          fromLocation: "true",
-          locationId: location.id,
-        },
+      // Fetch location data
+      const { data: locationData, error: locationError } = await supabase
+        .from("locations")
+        .select(
+          "id, name, address_line1, address_line2, city, state, postal_code, phone, status, created_at"
+        )
+        .eq("id", id)
+        .eq("status", "active")
+        .is("deleted_at", null)
+        .single();
+
+      if (locationError || !locationData) {
+        setError("Location not found");
+        setLoading(false);
+        return;
+      }
+
+      const loc = locationData as {
+        id: string;
+        name: string;
+        address_line1: string | null;
+        address_line2: string | null;
+        city: string | null;
+        state: string | null;
+        postal_code: string | null;
+        phone: string | null;
+        status: string;
+        created_at: string;
+      };
+
+      // Fetch providers (practitioners)
+      // Query through locations join to avoid RLS recursion on providers table
+      // The providers RLS policy uses is_location_participant which causes recursion
+      const { data: providersData, error: providersError } = await supabase
+        .from("locations")
+        .select(
+          "id, providers(id, first_name, last_name, credential, specialty, status)"
+        )
+        .eq("id", id)
+        .single();
+
+      if (providersError) {
+        console.error("Error fetching providers:", providersError);
+      }
+
+      // Extract providers from the nested structure and filter by status
+      const providersList = ((providersData as any)?.providers || []).filter(
+        (p: any) => p.status === "active"
+      );
+      const practitioners: Practitioner[] = (providersList as any[]).map(
+        (p: any) => ({
+          id: p.id,
+          name: `${p.first_name} ${p.last_name}`,
+          title: p.credential || "",
+          specialty: p.specialty || "",
+        })
+      );
+
+      console.log("Fetched practitioners:", practitioners.length);
+
+      // Fetch preferred meeting times
+      // Query through locations join to avoid RLS recursion on location_preferred_time_slots table
+      // The time slots RLS policy uses is_location_participant which causes recursion
+      const { data: timeSlotsData, error: timeSlotsError } = await supabase
+        .from("locations")
+        .select(
+          "id, location_preferred_time_slots(day_of_week, start_time, end_time, is_active)"
+        )
+        .eq("id", id)
+        .single();
+
+      if (timeSlotsError) {
+        console.error("Error fetching time slots:", timeSlotsError);
+      }
+
+      // Extract time slots from the nested structure and filter by is_active
+      const timeSlotsList = (
+        (timeSlotsData as any)?.location_preferred_time_slots || []
+      ).filter((slot: any) => slot.is_active === true);
+
+      const preferredMeetingTimes: PreferredMeetingTimes = {
+        monday: [],
+        tuesday: [],
+        wednesday: [],
+        thursday: [],
+        friday: [],
+      };
+
+      const dayMap: Record<number, keyof PreferredMeetingTimes> = {
+        0: "monday",
+        1: "tuesday",
+        2: "wednesday",
+        3: "thursday",
+        4: "friday",
+      };
+
+      // Sort by day_of_week, then by start_time
+      const sortedSlots = (timeSlotsList as any[]).sort((a, b) => {
+        if (a.day_of_week !== b.day_of_week) {
+          return a.day_of_week - b.day_of_week;
+        }
+        return a.start_time.localeCompare(b.start_time);
       });
-      return;
+
+      sortedSlots.forEach((slot: any) => {
+        const day = dayMap[slot.day_of_week];
+        if (day) {
+          const timeStr = `${slot.start_time} - ${slot.end_time}`;
+          preferredMeetingTimes[day].push(timeStr);
+        }
+      });
+
+      console.log("Fetched time slots:", timeSlotsList?.length || 0);
+      console.log("Preferred meeting times:", preferredMeetingTimes);
+
+      // Fetch food preferences
+      const { data: foodPrefData } = await supabase
+        .from("food_preferences")
+        .select("id")
+        .eq("location_id", id)
+        .eq("scope", "location")
+        .maybeSingle();
+
+      let foodPreferences: FoodPreferences | undefined;
+
+      if (foodPrefData && (foodPrefData as { id: string }).id) {
+        const foodPrefId = (foodPrefData as { id: string }).id;
+
+        const [
+          dietaryRestrictionsResult,
+          favoriteCategoriesResult,
+          dislikedCategoriesResult,
+        ] = await Promise.all([
+          supabase
+            .from("food_preferences_dietary_restrictions")
+            .select(
+              "dietary_restriction_id, dietary_restrictions!inner(key, label)"
+            )
+            .eq("food_preference_id", foodPrefId),
+          supabase
+            .from("food_preferences_favorite_categories")
+            .select("food_category_id, food_categories!inner(key, label)")
+            .eq("food_preference_id", foodPrefId),
+          supabase
+            .from("food_preferences_disliked_categories")
+            .select("food_category_id, food_categories!inner(key, label)")
+            .eq("food_preference_id", foodPrefId),
+        ]);
+
+        foodPreferences = {
+          dietary_restrictions: (dietaryRestrictionsResult.data || []).map(
+            (dr: any) =>
+              dr.dietary_restrictions?.label ||
+              dr.dietary_restrictions?.key ||
+              ""
+          ),
+          favorite_foods: (favoriteCategoriesResult.data || []).map(
+            (fc: any) =>
+              fc.food_categories?.label || fc.food_categories?.key || ""
+          ),
+          dislikes: (dislikedCategoriesResult.data || []).map(
+            (dc: any) =>
+              dc.food_categories?.label || dc.food_categories?.key || ""
+          ),
+        };
+      }
+
+      // Fetch location admin
+      const { data: adminRole, error: adminRoleError } = await supabase
+        .from("user_roles")
+        .select("profile_id, profiles(id, full_name, email)")
+        .eq("location_id", id)
+        .eq("role", "location_admin")
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (adminRoleError) {
+        console.error("Error fetching admin role:", adminRoleError);
+      }
+
+      if (adminRole && (adminRole as any).profiles) {
+        const profile = (adminRole as any).profiles;
+        setAdminUser({
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.full_name,
+          role: "admin",
+          created_at: "",
+          updated_at: "",
+        });
+        console.log("Fetched admin user:", profile.full_name);
+      } else {
+        console.log("No admin user found for location");
+      }
+
+      // Build the location object
+      const locationObj: MedicalOffice = {
+        id: loc.id,
+        name: loc.name,
+        address: loc.address_line1 || "",
+        city: loc.city || "",
+        state: loc.state || "",
+        zip_code: loc.postal_code || "",
+        phone: loc.phone || "",
+        latitude: 0,
+        longitude: 0,
+        created_at: loc.created_at,
+        practitioners: practitioners.length > 0 ? practitioners : undefined,
+        preferred_meeting_times: Object.values(preferredMeetingTimes).some(
+          (times) => times.length > 0
+        )
+          ? preferredMeetingTimes
+          : undefined,
+        food_preferences: foodPreferences,
+        admin_user_id: adminRole ? (adminRole as any).profile_id : undefined,
+      };
+
+      console.log("Final location object:", {
+        hasPractitioners: !!locationObj.practitioners,
+        practitionersCount: locationObj.practitioners?.length || 0,
+        hasPreferredTimes: !!locationObj.preferred_meeting_times,
+        hasFoodPreferences: !!locationObj.food_preferences,
+        hasAdminUserId: !!locationObj.admin_user_id,
+      });
+
+      setLocation(locationObj);
+    } catch (err) {
+      console.error("Error loading location data:", err);
+      setError("Failed to load location data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendMessage = useCallback(async () => {
+    if (!location || !user) return;
+
+    // Check for existing message thread with location admin
+    if (adminUser) {
+      const { data: existingMessage } = await supabase
+        .from("messages")
+        .select("id, location_id, sender_profile_id, recipient_profile_id")
+        .or(
+          `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${adminUser.id}),and(sender_profile_id.eq.${adminUser.id},recipient_profile_id.eq.${user.id})`
+        )
+        .eq("location_id", location.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingMessage) {
+        router.push({
+          pathname: "/(tabs)/messages/message-detail",
+          params: {
+            officeId: location.id,
+            officeName: location.name,
+            participantIds: adminUser.id,
+            participantNames: adminUser.full_name,
+            primaryParticipantId: adminUser.id,
+            fromLocation: "true",
+            locationId: location.id,
+          },
+        });
+        return;
+      }
     }
 
     if (!adminUser) {
@@ -121,6 +396,22 @@ export default function LocationDetailScreen() {
     { key: "thursday", label: "Thursday" },
     { key: "friday", label: "Friday" },
   ];
+
+  if (loading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50">
+        <ActivityIndicator size="large" color="#0086c9" />
+      </View>
+    );
+  }
+
+  if (error || !location) {
+    return (
+      <View className="flex-1 items-center justify-center bg-gray-50">
+        <Text className="text-gray-600">{error || "Location not found"}</Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-gray-50">
