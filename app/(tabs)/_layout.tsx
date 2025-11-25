@@ -120,11 +120,15 @@ function TabsContent() {
     const ids = new Set<string>();
     const cachedMessages = (cache.messages.messages.data as Message[]) || [];
     cachedMessages.forEach((message) => {
-      message.participant_ids.forEach((id) => {
-        if (id !== user?.id) {
-          ids.add(id);
-        }
-      });
+      if (message.sender_profile_id && message.sender_profile_id !== user?.id) {
+        ids.add(message.sender_profile_id);
+      }
+      if (
+        message.recipient_profile_id &&
+        message.recipient_profile_id !== user?.id
+      ) {
+        ids.add(message.recipient_profile_id);
+      }
     });
     return ids;
   }, [cache.messages.messages.data, user?.id]);
@@ -210,7 +214,6 @@ function TabsContent() {
       await mockMessagesService.sendMessage(
         selectedRecipient.id,
         officeInfo.id,
-        "New Conversation",
         trimmedBody
       );
       closeComposeSheet();

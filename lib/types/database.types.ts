@@ -1,10 +1,104 @@
 // Supabase Database Types
 
-export interface User {
+// Profile table structure from Supabase (matches profiles table)
+export interface Profile {
   id: string;
-  email: string;
   full_name: string;
-  role: 'medical_rep' | 'admin';
+  email: string;
+  phone: string | null;
+  user_type: string; // 'office_staff' | 'medical_rep' | 'admin' | etc.
+  default_company_id: string | null;
+  default_location_id: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Legacy User interface for backward compatibility (mapped from Profile)
+export type User = Profile;
+
+// Company table structure from Supabase
+export interface Company {
+  id: string;
+  name: string;
+  website: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+// Location table structure from Supabase (matches locations table)
+export interface Location {
+  id: string;
+  company_id: string;
+  name: string;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country: string;
+  timezone: string | null;
+  phone: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+// MedicalOffice interface for UI (mapped from Location)
+export interface MedicalOffice {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  phone: string;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+  practitioners?: Practitioner[];
+  preferred_meeting_times?: PreferredMeetingTimes;
+  food_preferences?: FoodPreferences;
+  admin_user_id?: string;
+  image_url?: string;
+}
+
+// Medical Rep table structure from Supabase
+export interface MedicalRep {
+  id: string;
+  profile_id: string | null;
+  company_name: string | null;
+  territory: string | null;
+  specialty_areas: string[] | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Medical Rep Location junction table
+export interface MedicalRepLocation {
+  id: string;
+  medical_rep_id: string;
+  location_id: string;
+  relationship_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// User Role table structure from Supabase
+export interface UserRole {
+  id: string;
+  profile_id: string;
+  location_id: string;
+  role: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -54,6 +148,18 @@ export interface PreferredMeetingTimes {
   friday: string[];
 }
 
+// Location Hours table structure from Supabase
+export interface LocationHours {
+  id: string;
+  location_id: string;
+  day_of_week: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  open_time: string | null; // time without time zone
+  close_time: string | null; // time without time zone
+  is_closed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Food Preferences from Supabase
 export interface FoodPreference {
   id: string;
@@ -70,73 +176,44 @@ export interface FoodPreferences {
   dislikes: string[];
 }
 
-// Location table structure from Supabase
-export interface Location {
-  id: string;
-  company_id: string;
-  name: string;
-  address_line1: string | null;
-  address_line2: string | null;
-  city: string | null;
-  state: string | null;
-  postal_code: string | null;
-  country: string;
-  timezone: string | null;
-  phone: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  created_by: string | null;
-  updated_by: string | null;
-}
-
-// MedicalOffice interface for UI (mapped from Location)
-export interface MedicalOffice {
-  id: string;
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  zip_code: string;
-  phone: string;
-  latitude: number;
-  longitude: number;
-  created_at: string;
-  practitioners?: Practitioner[];
-  preferred_meeting_times?: PreferredMeetingTimes;
-  food_preferences?: FoodPreferences;
-  admin_user_id?: string;
-  image_url?: string;
-}
-
+// Meeting table structure from Supabase (matches meetings table)
 export interface Meeting {
   id: string;
+  location_id: string;
   medical_rep_id: string;
-  office_id: string;
-  scheduled_at: string;
-  duration_minutes: number;
-  status: 'scheduled' | 'completed' | 'cancelled';
-  notes?: string;
+  requested_by_profile_id: string;
+  provider_id: string | null;
+  food_preferences_id: string | null;
+  meeting_type: string;
+  title: string | null;
+  description: string | null;
+  start_at: string;
+  end_at: string | null;
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  auto_approved: boolean;
+  approved_by_profile_id: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
-  office?: MedicalOffice;
+  location?: Location;
+  medical_rep?: MedicalRep;
 }
 
+// Message table structure from Supabase (matches messages table)
 export interface Message {
   id: string;
-  author_id: string;
-  participant_ids: string[];
-  office_id: string;
-  subject: string;
-  content: string;
-  read: boolean;
+  location_id: string;
+  meeting_id: string | null;
+  sender_profile_id: string;
+  recipient_profile_id: string | null;
+  body: string;
+  sent_at: string;
+  read_at: string | null;
   created_at: string;
-  author?: User;
-  participants?: User[];
-  office?: MedicalOffice;
-  other_participant_id?: string;
-  other_participant?: User;
+  updated_at: string;
+  location?: Location;
+  sender?: Profile;
+  recipient?: Profile;
 }
 
 export interface TimeSlot {
@@ -147,7 +224,7 @@ export interface TimeSlot {
 }
 
 export interface AvailableSlot {
-  office_id: string;
+  location_id: string;
   date: string;
   time_slots: TimeSlot[];
 }
@@ -155,15 +232,15 @@ export interface AvailableSlot {
 export interface Database {
   public: {
     Tables: {
-      users: {
-        Row: User;
-        Insert: Omit<User, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Omit<User, 'id' | 'created_at' | 'updated_at'>>;
+      profiles: {
+        Row: Profile;
+        Insert: Omit<Profile, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Profile, 'id' | 'created_at' | 'updated_at'>>;
       };
-      medical_offices: {
-        Row: MedicalOffice;
-        Insert: Omit<MedicalOffice, 'id' | 'created_at'>;
-        Update: Partial<Omit<MedicalOffice, 'id' | 'created_at'>>;
+      locations: {
+        Row: Location;
+        Insert: Omit<Location, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Location, 'id' | 'created_at' | 'updated_at'>>;
       };
       meetings: {
         Row: Meeting;
@@ -172,8 +249,38 @@ export interface Database {
       };
       messages: {
         Row: Message;
-        Insert: Omit<Message, 'id' | 'created_at'>;
-        Update: Partial<Omit<Message, 'id' | 'created_at'>>;
+        Insert: Omit<Message, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Message, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      companies: {
+        Row: Company;
+        Insert: Omit<Company, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Company, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      medical_reps: {
+        Row: MedicalRep;
+        Insert: Omit<MedicalRep, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<MedicalRep, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      medical_rep_locations: {
+        Row: MedicalRepLocation;
+        Insert: Omit<MedicalRepLocation, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<MedicalRepLocation, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      user_roles: {
+        Row: UserRole;
+        Insert: Omit<UserRole, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<UserRole, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      providers: {
+        Row: Provider;
+        Insert: Omit<Provider, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Provider, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      location_hours: {
+        Row: LocationHours;
+        Insert: Omit<LocationHours, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<LocationHours, 'id' | 'created_at' | 'updated_at'>>;
       };
     };
   };

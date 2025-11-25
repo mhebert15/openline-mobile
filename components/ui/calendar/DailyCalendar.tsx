@@ -69,10 +69,12 @@ export function DailyCalendar({
             </View>
             <View style={StyleSheet.absoluteFillObject}>
               {dayMeetings.map((meeting) => {
-                const start = parseISO(meeting.scheduled_at);
+                const start = parseISO(meeting.start_at);
                 const startMinutes = start.getHours() * 60 + start.getMinutes();
-                const endMinutes =
-                  startMinutes + (meeting.duration_minutes || 30);
+                const end = meeting.end_at ? parseISO(meeting.end_at) : null;
+                const endMinutes = end
+                  ? end.getHours() * 60 + end.getMinutes()
+                  : startMinutes + 30; // Default 30 minutes if no end time
                 const clampedStart = Math.max(START_HOUR * 60, startMinutes);
                 const clampedEnd = Math.min(END_HOUR * 60, endMinutes);
                 if (clampedEnd <= START_HOUR * 60) {
@@ -102,15 +104,20 @@ export function DailyCalendar({
                       {officeNameResolver(meeting)}
                     </Text>
                     <Text className="text-[11px] text-gray-700 mt-1">
-                      {format(start, "h:mm a")} • {meeting.duration_minutes}{" "}
+                      {format(start, "h:mm a")}
+                      {end ? ` - ${format(end, "h:mm a")}` : ""} •{" "}
+                      {Math.round((endMinutes - startMinutes) / 60) * 60 ===
+                      endMinutes - startMinutes
+                        ? (endMinutes - startMinutes) / 60
+                        : Math.round((endMinutes - startMinutes) / 60)}{" "}
                       mins
                     </Text>
-                    {meeting.notes && (
+                    {meeting.description && (
                       <Text
                         numberOfLines={2}
                         className="text-[10px] text-gray-500 mt-1"
                       >
-                        {meeting.notes}
+                        {meeting.description}
                       </Text>
                     )}
                   </View>

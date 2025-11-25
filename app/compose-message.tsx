@@ -17,12 +17,10 @@ export default function ComposeMessageScreen() {
   const router = useRouter();
   const [offices, setOffices] = useState<MedicalOffice[]>([]);
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
-  const [selectedOffice, setSelectedOffice] = useState<MedicalOffice | null>(
-    null
-  );
+  const [selectedLocation, setSelectedLocation] =
+    useState<MedicalOffice | null>(null);
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
-  const [subject, setSubject] = useState("");
-  const [content, setContent] = useState("");
+  const [body, setBody] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [showOfficePicker, setShowOfficePicker] = useState(false);
@@ -48,12 +46,7 @@ export default function ComposeMessageScreen() {
   };
 
   const handleSend = async () => {
-    if (
-      !selectedRecipient ||
-      !selectedOffice ||
-      !subject.trim() ||
-      !content.trim()
-    ) {
+    if (!selectedRecipient || !selectedLocation || !body.trim()) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
@@ -62,9 +55,8 @@ export default function ComposeMessageScreen() {
     try {
       await mockMessagesService.sendMessage(
         selectedRecipient.id,
-        selectedOffice.id,
-        subject,
-        content
+        selectedLocation.id,
+        body
       );
 
       Alert.alert("Success", "Message sent successfully", [
@@ -129,9 +121,9 @@ export default function ComposeMessageScreen() {
               onPress={() => setShowOfficePicker(!showOfficePicker)}
             >
               <Text
-                className={selectedOffice ? "text-gray-900" : "text-gray-400"}
+                className={selectedLocation ? "text-gray-900" : "text-gray-400"}
               >
-                {selectedOffice?.name || "Choose an office..."}
+                {selectedLocation?.name || "Choose a location..."}
               </Text>
             </TouchableOpacity>
 
@@ -142,12 +134,12 @@ export default function ComposeMessageScreen() {
                     key={office.id}
                     className="px-4 py-3 border-b border-gray-100 flex-row items-center justify-between"
                     onPress={() => {
-                      setSelectedOffice(office);
+                      setSelectedLocation(office);
                       setShowOfficePicker(false);
                     }}
                   >
                     <Text className="text-gray-900">{office.name}</Text>
-                    {selectedOffice?.id === office.id && (
+                    {selectedLocation?.id === office.id && (
                       <CheckIcon size={20} color="#0086c9" />
                     )}
                   </TouchableOpacity>
@@ -207,12 +199,7 @@ export default function ComposeMessageScreen() {
             <Text className="text-sm font-medium text-gray-700 mb-2">
               Subject
             </Text>
-            <TextInput
-              className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-              placeholder="Enter subject..."
-              value={subject}
-              onChangeText={setSubject}
-            />
+            <TextInput className="border border-gray-300 rounded-lg px-4 py-3 text-base" />
           </View>
         </View>
 
@@ -224,8 +211,8 @@ export default function ComposeMessageScreen() {
           <TextInput
             className="border border-gray-300 rounded-lg px-4 py-3 text-base min-h-[200px]"
             placeholder="Type your message here..."
-            value={content}
-            onChangeText={setContent}
+            value={body}
+            onChangeText={setBody}
             multiline
             textAlignVertical="top"
           />

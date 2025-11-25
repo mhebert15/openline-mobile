@@ -122,7 +122,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Build query for locations
-      const isAdmin = user.role === "admin";
+      const isAdmin = user.user_type === "admin";
       let locationsQuery;
 
       // If user is not admin and has a medical_rep record, first get accessible location IDs
@@ -142,7 +142,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           return [];
         }
 
-        const locationIds = (repLocations || []).map((rl: any) => rl.location_id);
+        const locationIds = (repLocations || []).map(
+          (rl: any) => rl.location_id
+        );
 
         // Step 2: Query locations using the IDs we just fetched
         if (locationIds.length === 0) {

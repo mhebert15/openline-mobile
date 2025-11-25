@@ -83,7 +83,7 @@ function CalendarScreen() {
     }
   };
 
-  const officeMap = useMemo(() => {
+  const locationMap = useMemo(() => {
     const map = new Map<string, MedicalOffice>();
     locations.forEach((location) => map.set(location.id, location));
     return map;
@@ -92,7 +92,7 @@ function CalendarScreen() {
   const meetingsByDate = useMemo(() => {
     const map: Record<string, Meeting[]> = {};
     meetings.forEach((meeting) => {
-      const dateStr = meeting.scheduled_at.split("T")[0];
+      const dateStr = meeting.start_at.split("T")[0];
       if (!map[dateStr]) {
         map[dateStr] = [];
       }
@@ -210,7 +210,10 @@ function CalendarScreen() {
   }
 
   const officeNameResolver = (meeting: Meeting) =>
-    meeting.office?.name || officeMap.get(meeting.office_id)?.name || "Meeting";
+    meeting.location?.name ||
+    locationMap.get(meeting.location_id)?.name ||
+    meeting.title ||
+    "Meeting";
 
   return (
     <View className="flex-1 bg-gray-50">

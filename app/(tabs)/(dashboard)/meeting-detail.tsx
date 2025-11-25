@@ -57,9 +57,15 @@ export default function MeetingDetailScreen() {
     );
   }
 
-  const office =
-    meeting.office || mockOffices.find((o) => o.id === meeting.office_id);
-  const meetingDate = new Date(meeting.scheduled_at);
+  const location = meeting.location;
+  const meetingDate = new Date(meeting.start_at);
+  const durationMinutes = meeting.end_at
+    ? Math.round(
+        (new Date(meeting.end_at).getTime() -
+          new Date(meeting.start_at).getTime()) /
+          60000
+      )
+    : null;
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
@@ -71,7 +77,7 @@ export default function MeetingDetailScreen() {
             </View>
             <View className="flex-1">
               <Text className="text-lg font-semibold text-gray-900">
-                {office?.name || "Medical Office"}
+                {location?.name || meeting.title || "Medical Office"}
               </Text>
               <Text className="text-gray-500 text-sm">{meeting.status}</Text>
             </View>
@@ -87,21 +93,30 @@ export default function MeetingDetailScreen() {
           <View className="flex-row items-center mb-2">
             <ClockIcon size={18} color="#6b7280" />
             <Text className="text-gray-700 ml-2">
-              {format(meetingDate, "h:mm a")} • {meeting.duration_minutes}{" "}
-              minutes
+              {format(meetingDate, "h:mm a")}
+              {meeting.end_at
+                ? ` - ${format(new Date(meeting.end_at), "h:mm a")}`
+                : ""}
+              {durationMinutes ? ` • ${durationMinutes} minutes` : ""}
             </Text>
           </View>
 
-          {office?.address && (
+          {location?.address_line1 && (
             <View className="flex-row items-start mb-2">
               <MapPinIcon size={18} color="#6b7280" />
               <Text className="text-gray-600 ml-2 flex-1">
-                {office.address}
-                {office.city ? `, ${office.city}` : ""}
+                {location.address_line1}
+                {location.city ? `, ${location.city}` : ""}
               </Text>
             </View>
           )}
 
+          {meeting.description && (
+            <View className="mt-3 pt-3 border-t border-gray-100">
+              <Text className="text-gray-900 font-medium mb-1">Description</Text>
+              <Text className="text-gray-600 text-sm">{meeting.description}</Text>
+            </View>
+          )}
           {meeting.notes && (
             <View className="mt-3 pt-3 border-t border-gray-100">
               <Text className="text-gray-900 font-medium mb-1">Notes</Text>
@@ -110,7 +125,7 @@ export default function MeetingDetailScreen() {
           )}
         </View>
 
-        {office?.practitioners && office.practitioners.length > 0 && (
+        {/* Note: Practitioners and food preferences would come from location, not meeting directly */}
           <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
             <View className="flex-row items-center mb-3">
               <UserIcon size={20} color="#0086c9" />

@@ -20,6 +20,7 @@ import type {
   PreferredMeetingTimes,
   FoodPreferences,
   User,
+  LocationHours,
 } from "@/lib/types/database.types";
 import {
   MapPinIcon,
@@ -39,6 +40,7 @@ export default function LocationDetailScreen() {
   const { user } = useAuth();
   const [location, setLocation] = useState<MedicalOffice | null>(null);
   const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,7 @@ export default function LocationDetailScreen() {
       setError(null);
 
       // First, verify user has access to this location
-      const isAdmin = user.role === "admin";
+      const isAdmin = user.user_type === "admin";
       let hasAccess = isAdmin;
 
       if (!isAdmin) {
@@ -253,6 +255,20 @@ export default function LocationDetailScreen() {
         };
       }
 
+      // Fetch location hours
+      const { data: hoursData, error: hoursError } = await supabase
+        .from("location_hours")
+        .select("id, day_of_week, open_time, close_time, is_closed")
+        .eq("location_id", id)
+        .order("day_of_week", { ascending: true });
+
+      if (hoursError) {
+        console.error("Error fetching location hours:", hoursError);
+      } else {
+        setLocationHours((hoursData as LocationHours[]) || []);
+        console.log("Fetched location hours:", hoursData?.length || 0);
+      }
+
       // Fetch location admin
       const { data: adminRole, error: adminRoleError } = await supabase
         .from("user_roles")
@@ -272,9 +288,13 @@ export default function LocationDetailScreen() {
           id: profile.id,
           email: profile.email,
           full_name: profile.full_name,
-          role: "admin",
-          created_at: "",
-          updated_at: "",
+          phone: profile.phone || null,
+          user_type: profile.user_type || "admin",
+          default_company_id: profile.default_company_id || null,
+          default_location_id: profile.default_location_id || null,
+          status: profile.status || "active",
+          created_at: profile.created_at || new Date().toISOString(),
+          updated_at: profile.updated_at || new Date().toISOString(),
         });
         console.log("Fetched admin user:", profile.full_name);
       } else {
@@ -397,6 +417,26 @@ export default function LocationDetailScreen() {
     { key: "friday", label: "Friday" },
   ];
 
+  const dayNames = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+
+  const formatTime = (time: string | null): string => {
+    if (!time) return "";
+    // Convert HH:MM:SS to HH:MM AM/PM format
+    const [hours, minutes] = time.split(":");
+    const hour = parseInt(hours, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -464,11 +504,41 @@ export default function LocationDetailScreen() {
             </View>
           )}
 
+          {/* Location Hours */}
+          {locationHours.length > 0 && (
+            <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+              <View className="flex-row items-center mb-3">
+                <ClockIcon size={20} color="#0086c9" />
+                <Text className="text-lg font-semibold text-gray-900 ml-2">
+                  Location Hours
+                </Text>
+              </View>
+              {locationHours.map((hour) => (
+                <View
+                  key={hour.id}
+                  className="flex-row justify-between items-center py-2 border-b border-gray-100 last:border-b-0"
+                >
+                  <Text className="text-gray-900 font-medium">
+                    {dayNames[hour.day_of_week]}
+                  </Text>
+                  {hour.is_closed ? (
+                    <Text className="text-gray-500 text-sm">Closed</Text>
+                  ) : (
+                    <Text className="text-gray-600 text-sm">
+                      {formatTime(hour.open_time)} -{" "}
+                      {formatTime(hour.close_time)}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Preferred Meeting Times */}
           {location.preferred_meeting_times && (
             <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
               <View className="flex-row items-center mb-3">
-                <ClockIcon size={20} color="#0086c9" />
+                <CalendarIcon size={20} color="#0086c9" />
                 <Text className="text-lg font-semibold text-gray-900 ml-2">
                   Preferred Meeting Times
                 </Text>

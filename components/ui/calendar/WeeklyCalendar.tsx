@@ -100,11 +100,15 @@ export function WeeklyCalendar({
                   </View>
                   <View style={StyleSheet.absoluteFillObject}>
                     {dayMeetings.map((meeting) => {
-                      const start = parseISO(meeting.scheduled_at);
+                      const start = parseISO(meeting.start_at);
                       const startMinutes =
                         start.getHours() * 60 + start.getMinutes();
-                      const endMinutes =
-                        startMinutes + (meeting.duration_minutes || 30);
+                      const end = meeting.end_at
+                        ? parseISO(meeting.end_at)
+                        : null;
+                      const endMinutes = end
+                        ? end.getHours() * 60 + end.getMinutes()
+                        : startMinutes + 30; // Default 30 minutes if no end time
                       const clampedStart = Math.max(
                         START_HOUR * 60,
                         startMinutes

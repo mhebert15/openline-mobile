@@ -40,19 +40,14 @@ function MessagesScreen() {
     }
   }, [user, cache.messages.messages.data, prefetchTabData]);
 
-  const getOtherParticipants = (message: Message) => {
-    const participants = message.participants || [];
-    const others = participants.filter(
-      (participant) => participant.id !== user?.id
-    );
-
-    if (others.length === 0 && message.other_participant) {
-      if (message.other_participant.id !== user?.id) {
-        return [message.other_participant];
-      }
+  const getOtherParticipant = (message: Message) => {
+    // Message has sender and recipient - return the one that's not the current user
+    if (message.sender?.id === user?.id && message.recipient) {
+      return message.recipient;
+    } else if (message.recipient?.id === user?.id && message.sender) {
+      return message.sender;
     }
-
-    return others;
+    return message.recipient || message.sender || null;
   };
 
   const onRefresh = async () => {
@@ -68,15 +63,13 @@ function MessagesScreen() {
   };
 
   const handleMessagePress = async (message: Message) => {
-    const otherParticipants = getOtherParticipants(message);
-    const primaryParticipant =
-      otherParticipants[0] || message.other_participant;
+    const otherParticipant = getOtherParticipant(message);
 
-    if (!primaryParticipant) {
+    if (!otherParticipant) {
       return;
     }
 
-    const isUnread = message.author_id !== user?.id && !message.read;
+    const isUnread = message.sender_profile_id !== user?.id && !message.read_at;
     if (isUnread) {
       mockMessagesService
         .markAsRead(message.id)
@@ -90,15 +83,10 @@ function MessagesScreen() {
     router.push({
       pathname: "/(tabs)/messages/message-detail",
       params: {
-        officeId: message.office_id,
-        officeName: message.office?.name || "Message",
-        participantIds: otherParticipants
-          .map((participant) => participant.id)
-          .join(","),
-        participantNames: otherParticipants
-          .map((participant) => participant.full_name)
-          .join(", "),
-        primaryParticipantId: primaryParticipant.id,
+        locationId: message.location_id,
+        locationName: message.location?.name || "Message",
+        participantId: otherParticipant.id,
+        participantName: otherParticipant.full_name,
       },
     });
   };
@@ -106,11 +94,12 @@ function MessagesScreen() {
   const existingConversationParticipantIds = useMemo(() => {
     const ids = new Set<string>();
     messages.forEach((message) => {
-      message.participant_ids.forEach((id) => {
-        if (id !== user?.id) {
-          ids.add(id);
-        }
-      });
+      if (message.sender?.id && message.sender.id !== user?.id) {
+        ids.add(message.sender.id);
+      }
+      if (message.recipient?.id && message.recipient.id !== user?.id) {
+        ids.add(message.recipient.id);
+      }
     });
     return ids;
   }, [messages, user?.id]);
@@ -146,18 +135,11 @@ function MessagesScreen() {
             </View>
           ) : (
             messages.map((message) => {
-              const otherParticipants = getOtherParticipants(message);
-              const otherNames =
-                otherParticipants.length > 0
-                  ? otherParticipants
-                      .map((participant) => participant.full_name)
-                      .join(", ")
-                  : "You";
-              const hasOtherParticipants = otherParticipants.length > 0;
-              const officeName = hasOtherParticipants
-                ? message.office?.name || "Unknown Office"
-                : "You";
-              const isUnread = message.author_id !== user?.id && !message.read;
+              const otherParticipant = getOtherParticipant(message);
+              const otherName = otherParticipant?.full_name || "You";
+              const locationName = message.location?.name || "Unknown Location";
+              const isUnread =
+                message.sender_profile_id !== user?.id && !message.read_at;
 
               return (
                 <TouchableOpacity
@@ -175,7 +157,7 @@ function MessagesScreen() {
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="flex-1">
                       <Text className="text-lg font-semibold text-gray-900">
-                        {officeName}
+                        {locationName}
                       </Text>
                     </View>
                     {isUnread && (
@@ -187,13 +169,16 @@ function MessagesScreen() {
                   </View>
 
                   <Text className="text-gray-700 mb-2" numberOfLines={2}>
-                    {message.content}
+                    {message.body}
                   </Text>
 
                   <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{otherNames}</Text>
+                    <Text className="text-sm text-gray-500">{otherName}</Text>
                     <Text className="text-sm text-gray-500">
-                      {format(new Date(message.created_at), "MMM d, h:mm a")}
+                      {format(
+                        new Date(message.sent_at || message.created_at),
+                        "MMM d, h:mm a"
+                      )}
                     </Text>
                   </View>
                 </TouchableOpacity>

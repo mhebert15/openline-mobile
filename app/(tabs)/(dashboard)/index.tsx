@@ -130,14 +130,6 @@ function DashboardScreen() {
               <Text className="text-gray-500 mt-4 text-center">
                 No upcoming meetings scheduled
               </Text>
-              <TouchableOpacity
-                className="mt-4"
-                onPress={() => router.push("/(tabs)/calendar")}
-              >
-                <Text className="font-semibold" style={{ color: "#0086c9" }}>
-                  Book your first meeting
-                </Text>
-              </TouchableOpacity>
             </View>
           ) : (
             upcomingMeetings.map((meeting) => (
@@ -159,7 +151,7 @@ function DashboardScreen() {
                     </View>
                     <View className="flex-1">
                       <Text className="text-lg font-semibold text-gray-900">
-                        {meeting.office?.name}
+                        {meeting.location?.name || meeting.title || "Meeting"}
                       </Text>
                     </View>
                   </View>
@@ -167,34 +159,42 @@ function DashboardScreen() {
                   <View className="flex-row items-center mb-2 ml-11">
                     <ClockIcon size={16} color="#6b7280" />
                     <Text className="text-gray-600 ml-2">
-                      {format(
-                        new Date(meeting.scheduled_at),
-                        "EEEE, MMMM d, yyyy"
-                      )}
+                      {format(new Date(meeting.start_at), "EEEE, MMMM d, yyyy")}
                     </Text>
                   </View>
 
                   <View className="flex-row items-center mb-2 ml-11">
                     <ClockIcon size={16} color="#6b7280" />
                     <Text className="text-gray-600 ml-2">
-                      {format(new Date(meeting.scheduled_at), "h:mm a")} •{" "}
-                      {meeting.duration_minutes} minutes
+                      {format(new Date(meeting.start_at), "h:mm a")}
+                      {meeting.end_at
+                        ? ` - ${format(new Date(meeting.end_at), "h:mm a")}`
+                        : ""}
+                      {meeting.end_at &&
+                        ` • ${Math.round(
+                          (new Date(meeting.end_at).getTime() -
+                            new Date(meeting.start_at).getTime()) /
+                            60000
+                        )} minutes`}
                     </Text>
                   </View>
 
-                  {meeting.office?.address && (
+                  {meeting.location?.address_line1 && (
                     <View className="flex-row items-center ml-11">
                       <MapPinIcon size={16} color="#6b7280" />
                       <Text className="text-gray-500 ml-2 flex-1">
-                        {meeting.office.address}, {meeting.office.city}
+                        {meeting.location.address_line1}
+                        {meeting.location.city
+                          ? `, ${meeting.location.city}`
+                          : ""}
                       </Text>
                     </View>
                   )}
 
-                  {meeting.notes && (
+                  {meeting.description && (
                     <View className="mt-3 pt-3 border-t border-gray-100 ml-11">
                       <Text className="text-gray-600 text-sm">
-                        {meeting.notes}
+                        {meeting.description}
                       </Text>
                     </View>
                   )}

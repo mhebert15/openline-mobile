@@ -20,26 +20,16 @@ const resolveUserById = (id: string): User | undefined => {
 };
 
 const hydrateMessageForUser = (message: Message, userId: string): Message => {
-  const participants: User[] =
-    message.participants && message.participants.length > 0
-      ? message.participants
-      : message.participant_ids
-          .map((participantId) => resolveUserById(participantId))
-          .filter((participant): participant is User => Boolean(participant));
-
-  const otherParticipantId =
-    message.participant_ids.find((participantId) => participantId !== userId) ||
-    userId;
-
+  // Determine the other participant (the one that's not the current user)
   const otherParticipant =
-    participants?.find((participant) => participant.id === otherParticipantId) ||
-    resolveUserById(otherParticipantId);
+    message.sender_profile_id === userId
+      ? message.recipient
+      : message.sender;
 
   return {
     ...message,
-    participants,
-    other_participant_id: otherParticipant?.id,
-    other_participant: otherParticipant,
+    sender: message.sender || resolveUserById(message.sender_profile_id),
+    recipient: message.recipient || resolveUserById(message.recipient_profile_id || ""),
   };
 };
 
@@ -71,8 +61,8 @@ export const mockMeetingsService = {
     return mockMeetings.filter(
       (meeting) =>
         meeting.medical_rep_id === userId &&
-        meeting.status === 'scheduled' &&
-        new Date(meeting.scheduled_at) > now
+        (meeting.status === 'pending' || meeting.status === 'approved') &&
+        new Date(meeting.start_at) > now
     );
   },
 
@@ -95,17 +85,27 @@ export const mockMeetingsService = {
   ): Promise<Meeting> {
     await delay(1000);
     const office = mockOffices.find((o) => o.id === officeId);
+    const startDate = new Date(scheduledAt);
+    const endDate = new Date(startDate.getTime() + 30 * 60000); // Add 30 minutes
     const newMeeting: Meeting = {
       id: `meeting-${Date.now()}`,
+      location_id: officeId,
       medical_rep_id: mockCurrentUser.id,
-      office_id: officeId,
-      scheduled_at: scheduledAt,
-      duration_minutes: 30,
-      status: 'scheduled',
-      notes,
+      requested_by_profile_id: mockCurrentUser.id,
+      provider_id: null,
+      food_preferences_id: null,
+      meeting_type: 'in_person',
+      title: null,
+      description: notes || null,
+      start_at: scheduledAt,
+      end_at: endDate.toISOString(),
+      status: 'pending',
+      auto_approved: false,
+      approved_by_profile_id: null,
+      approved_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      office,
+      location: office as any, // Mock data uses MedicalOffice, but Meeting expects Location
     };
     mockMeetings.push(newMeeting);
     return newMeeting;
@@ -133,7 +133,11 @@ export const mockMessagesService = {
   async getMessages(userId: string): Promise<Message[]> {
     await delay(900);
     return mockMessages
-      .filter((message) => message.participant_ids.includes(userId))
+      .filter(
+        (message) =>
+          message.sender_profile_id === userId ||
+          message.recipient_profile_id === userId
+      )
       .map((message) => hydrateMessageForUser(message, userId));
   },
 
@@ -141,39 +145,37 @@ export const mockMessagesService = {
     await delay(500);
     return mockMessages.filter(
       (message) =>
-        message.participant_ids.includes(userId) &&
-        message.author_id !== userId &&
-        !message.read
+        (message.sender_profile_id === userId ||
+          message.recipient_profile_id === userId) &&
+        message.sender_profile_id !== userId &&
+        !message.read_at
     ).length;
   },
 
   async sendMessage(
-    participantId: string,
-    officeId: string,
-    subject: string,
-    content: string
+    recipientId: string,
+    locationId: string,
+    body: string
   ): Promise<Message> {
     await delay(1000);
-    const office = mockOffices.find((o) => o.id === officeId);
+    const location = mockOffices.find((o) => o.id === locationId);
     const recipient =
-      mockAdminUsers.find((admin) => admin.id === participantId) ||
-      (participantId === mockCurrentUser.id ? mockCurrentUser : undefined);
-    const participants = [mockCurrentUser];
-    if (recipient) {
-      participants.push(recipient);
-    }
+      mockAdminUsers.find((admin) => admin.id === recipientId) ||
+      (recipientId === mockCurrentUser.id ? mockCurrentUser : undefined);
     const newMessage: Message = {
       id: `message-${Date.now()}`,
-      author_id: mockCurrentUser.id,
-      participant_ids: [mockCurrentUser.id, participantId],
-      office_id: officeId,
-      subject,
-      content,
-      read: false,
+      location_id: locationId,
+      meeting_id: null,
+      sender_profile_id: mockCurrentUser.id,
+      recipient_profile_id: recipientId,
+      body,
+      sent_at: new Date().toISOString(),
+      read_at: null,
       created_at: new Date().toISOString(),
-      author: mockCurrentUser,
-      participants,
-      office,
+      updated_at: new Date().toISOString(),
+      location: location as any, // Mock data uses MedicalOffice, but Message expects Location
+      sender: mockCurrentUser,
+      recipient,
     };
     mockMessages.push(newMessage);
     return hydrateMessageForUser(newMessage, mockCurrentUser.id);
@@ -183,7 +185,7 @@ export const mockMessagesService = {
     await delay(500);
     const message = mockMessages.find((m) => m.id === messageId);
     if (message) {
-      message.read = true;
+      message.read_at = new Date().toISOString();
     }
   },
 

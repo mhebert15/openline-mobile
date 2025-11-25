@@ -119,9 +119,9 @@ export default function BookMeetingScreen() {
   const dayMeetings = useMemo(() => {
     if (!selectedDate) return [] as Meeting[];
     return meetings.filter((meeting) => {
-      const matchesDate = meeting.scheduled_at.startsWith(selectedDate);
+      const matchesDate = meeting.start_at.startsWith(selectedDate);
       const matchesLocation = selectedLocationId
-        ? meeting.office_id === selectedLocationId
+        ? meeting.location_id === selectedLocationId
         : true;
       return matchesDate && matchesLocation;
     });
@@ -129,7 +129,7 @@ export default function BookMeetingScreen() {
 
   const dayMeetingTimes = useMemo(() => {
     return dayMeetings.map((meeting) =>
-      format(new Date(meeting.scheduled_at), "HH:mm")
+      format(new Date(meeting.start_at), "HH:mm")
     );
   }, [dayMeetings]);
 
@@ -276,11 +276,10 @@ export default function BookMeetingScreen() {
               const isSelected = selectedDateIndex === index;
               const hasMeetings = meetings.some((meeting) => {
                 const matchesLocation = selectedLocationId
-                  ? meeting.office_id === selectedLocationId
+                  ? meeting.location_id === selectedLocationId
                   : true;
                 return (
-                  matchesLocation &&
-                  meeting.scheduled_at.startsWith(dateOption.key)
+                  matchesLocation && meeting.start_at.startsWith(dateOption.key)
                 );
               });
               return (
@@ -355,17 +354,20 @@ export default function BookMeetingScreen() {
             </Text>
             {dayMeetings.map((meeting) => {
               const location = locations.find(
-                (loc) => loc.id === meeting.office_id
+                (loc) => loc.id === meeting.location_id
               );
               return (
                 <View key={meeting.id} className="mb-3 last:mb-0">
                   <Text className="text-sm font-semibold text-gray-900">
-                    {meeting.office?.name || location?.name || "Meeting"}
+                    {meeting.location?.name ||
+                      meeting.title ||
+                      location?.name ||
+                      "Meeting"}
                   </Text>
                   <View className="flex-row items-center mt-1">
                     <ClockIcon size={14} color="#6b7280" />
                     <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.scheduled_at), "h:mm a")}
+                      {format(new Date(meeting.start_at), "h:mm a")}
                     </Text>
                   </View>
                 </View>
@@ -509,7 +511,7 @@ export default function BookMeetingScreen() {
             </Text>
             {meetings.slice(0, 3).map((meeting) => {
               const location = locations.find(
-                (loc) => loc.id === meeting.office_id
+                (loc) => loc.id === meeting.location_id
               );
               return (
                 <View key={meeting.id} className="mb-3 last:mb-0">
@@ -519,13 +521,13 @@ export default function BookMeetingScreen() {
                   <View className="flex-row items-center mt-1">
                     <CalendarIcon size={14} color="#6b7280" />
                     <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.scheduled_at), "MMMM d, yyyy")}
+                      {format(new Date(meeting.start_at), "MMMM d, yyyy")}
                     </Text>
                   </View>
                   <View className="flex-row items-center mt-1">
                     <ClockIcon size={14} color="#6b7280" />
                     <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.scheduled_at), "h:mm a")}
+                      {format(new Date(meeting.start_at), "h:mm a")}
                     </Text>
                   </View>
                 </View>

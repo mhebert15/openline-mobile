@@ -18,14 +18,12 @@ import { format } from "date-fns";
 import { SendIcon } from "lucide-react-native";
 
 export default function MessageDetailScreen() {
-  const { officeId, participantIds, primaryParticipantId } =
-    useLocalSearchParams<{
-      officeId: string;
-      officeName?: string;
-      participantIds?: string;
-      participantNames?: string;
-      primaryParticipantId?: string;
-    }>();
+  const { locationId, participantId } = useLocalSearchParams<{
+    locationId: string;
+    locationName?: string;
+    participantId?: string;
+    participantName?: string;
+  }>();
   const { user } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -35,21 +33,24 @@ export default function MessageDetailScreen() {
 
   useEffect(() => {
     loadConversation();
-  }, [officeId, user]);
+  }, [locationId, user]);
 
   const loadConversation = () => {
-    if (!user || !officeId) return;
+    if (!user || !locationId) return;
 
     // Filter messages for this specific conversation
     const conversationMessages = mockMessages.filter(
       (msg) =>
-        msg.office_id === officeId && msg.participant_ids.includes(user.id)
+        msg.location_id === locationId &&
+        (msg.sender_profile_id === user.id ||
+          msg.recipient_profile_id === user.id)
     );
 
-    // Sort by created_at ascending (oldest first)
+    // Sort by sent_at/created_at ascending (oldest first)
     const sorted = conversationMessages.sort(
       (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        new Date(a.sent_at || a.created_at).getTime() -
+        new Date(b.sent_at || b.created_at).getTime()
     );
 
     setMessages(sorted);
@@ -63,21 +64,14 @@ export default function MessageDetailScreen() {
 
   const handleSend = async () => {
     const trimmed = messageText.trim();
-    const targetParticipantId =
-      primaryParticipantId || participantIds?.split(",").filter(Boolean)[0];
 
-    if (!trimmed || !user || !officeId || !targetParticipantId) {
+    if (!trimmed || !user || !locationId || !participantId) {
       return;
     }
 
     setSending(true);
     try {
-      await mockMessagesService.sendMessage(
-        targetParticipantId,
-        officeId,
-        "Re: Conversation",
-        trimmed
-      );
+      await mockMessagesService.sendMessage(participantId, locationId, trimmed);
 
       setMessageText("");
       loadConversation();
@@ -138,25 +132,24 @@ export default function MessageDetailScreen() {
           </View>
         ) : (
           messages.map((message, index) => {
-            const isSentByMe = message.author_id === user?.id;
+            const isSentByMe = message.sender_profile_id === user?.id;
             const senderName = isSentByMe
               ? "You"
-              : message.author?.full_name ||
-                message.participants?.find(
-                  (participant) => participant.id === message.author_id
-                )?.full_name ||
-                "Unknown sender";
+              : message.sender?.full_name || "Unknown sender";
+            const messageTime = message.sent_at || message.created_at;
             const showTimestamp =
               index === 0 ||
-              new Date(message.created_at).getTime() -
-                new Date(messages[index - 1].created_at).getTime() >
+              new Date(messageTime).getTime() -
+                new Date(
+                  messages[index - 1].sent_at || messages[index - 1].created_at
+                ).getTime() >
                 300000; // 5 minutes
 
             return (
               <View key={message.id} className="mb-3">
                 {showTimestamp && (
                   <Text className="text-xs text-gray-500 text-center mb-2">
-                    {formatMessageTime(message.created_at)}
+                    {formatMessageTime(messageTime)}
                   </Text>
                 )}
                 <View
@@ -187,7 +180,7 @@ export default function MessageDetailScreen() {
                         isSentByMe ? "text-white" : "text-gray-900"
                       }`}
                     >
-                      {message.content}
+                      {message.body}
                     </Text>
                   </View>
                 </View>
