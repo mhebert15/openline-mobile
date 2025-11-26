@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { format } from "date-fns";
@@ -10,12 +10,32 @@ import {
   UtensilsIcon,
 } from "lucide-react-native";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
-import type { Meeting } from "@/lib/types/database.types";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { supabase } from "@/lib/supabase/client";
+import type {
+  Meeting,
+  Practitioner,
+  PreferredMeetingTimes,
+  FoodPreferences,
+  LocationHours,
+  User,
+} from "@/lib/types/database.types";
 import { mockMeetings, mockOffices } from "@/lib/mock/data";
 
 export default function MeetingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { cache, prefetchTabData } = useDataCache();
+  const { user } = useAuth();
+
+  const [practitioners, setPractitioners] = useState<Practitioner[]>([]);
+  const [preferredMeetingTimes, setPreferredMeetingTimes] =
+    useState<PreferredMeetingTimes | null>(null);
+  const [foodPreferences, setFoodPreferences] =
+    useState<FoodPreferences | null>(null);
+  const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
+  const [officeStaff, setOfficeStaff] = useState<User[]>([]);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [loadedLocationId, setLoadedLocationId] = useState<string | null>(null);
 
   const meetingsFromCache = useMemo(() => {
     const dashboardMeetings =
@@ -33,21 +53,205 @@ export default function MeetingDetailScreen() {
     return mockMeetings.find((item) => item.id === id);
   }, [id, meetingsFromCache]);
 
+  const loadLocationData = React.useCallback(
+    async (locationId: string) => {
+      if (!user) return;
+
+      try {
+        setLoadingLocation(true);
+
+        // Fetch providers (practitioners)
+        const { data: providersData } = await supabase
+          .from("locations")
+          .select(
+            "id, providers(id, location_id, profile_id, first_name, last_name, credential, specialty, email, phone, status, created_at, updated_at)"
+          )
+          .eq("id", locationId)
+          .single();
+
+        const providersList = ((providersData as any)?.providers || []).filter(
+          (p: any) => p.status === "active"
+        );
+        const practitionersList: Practitioner[] = (providersList as any[]).map(
+          (p: any) => ({
+            ...p,
+            location_id: p.location_id || locationId,
+            title: p.credential || "",
+          })
+        );
+        setPractitioners(practitionersList);
+
+        // Fetch preferred meeting times
+        const { data: timeSlotsData } = await supabase
+          .from("locations")
+          .select(
+            "id, location_preferred_time_slots(day_of_week, start_time, end_time, is_active)"
+          )
+          .eq("id", locationId)
+          .single();
+
+        const timeSlotsList = (
+          (timeSlotsData as any)?.location_preferred_time_slots || []
+        ).filter((slot: any) => slot.is_active === true);
+
+        const preferredTimes: PreferredMeetingTimes = {
+          monday: [],
+          tuesday: [],
+          wednesday: [],
+          thursday: [],
+          friday: [],
+        };
+
+        const dayMap: Record<number, keyof PreferredMeetingTimes> = {
+          0: "monday",
+          1: "tuesday",
+          2: "wednesday",
+          3: "thursday",
+          4: "friday",
+        };
+
+        const sortedSlots = (timeSlotsList as any[]).sort((a, b) => {
+          if (a.day_of_week !== b.day_of_week) {
+            return a.day_of_week - b.day_of_week;
+          }
+          return a.start_time.localeCompare(b.start_time);
+        });
+
+        sortedSlots.forEach((slot: any) => {
+          const day = dayMap[slot.day_of_week];
+          if (day) {
+            const timeStr = `${slot.start_time} - ${slot.end_time}`;
+            preferredTimes[day].push(timeStr);
+          }
+        });
+
+        if (Object.values(preferredTimes).some((times) => times.length > 0)) {
+          setPreferredMeetingTimes(preferredTimes);
+        }
+
+        // Fetch food preferences
+        const { data: foodPrefData } = await supabase
+          .from("food_preferences")
+          .select("id")
+          .eq("location_id", locationId)
+          .eq("scope", "location")
+          .maybeSingle();
+
+        if (foodPrefData && (foodPrefData as { id: string }).id) {
+          const foodPrefId = (foodPrefData as { id: string }).id;
+
+          const [
+            dietaryRestrictionsResult,
+            favoriteCategoriesResult,
+            dislikedCategoriesResult,
+          ] = await Promise.all([
+            supabase
+              .from("food_preferences_dietary_restrictions")
+              .select(
+                "dietary_restriction_id, dietary_restrictions!inner(key, label)"
+              )
+              .eq("food_preference_id", foodPrefId),
+            supabase
+              .from("food_preferences_favorite_categories")
+              .select("food_category_id, food_categories!inner(key, label)")
+              .eq("food_preference_id", foodPrefId),
+            supabase
+              .from("food_preferences_disliked_categories")
+              .select("food_category_id, food_categories!inner(key, label)")
+              .eq("food_preference_id", foodPrefId),
+          ]);
+
+          setFoodPreferences({
+            dietary_restrictions: (dietaryRestrictionsResult.data || []).map(
+              (dr: any) =>
+                dr.dietary_restrictions?.label ||
+                dr.dietary_restrictions?.key ||
+                ""
+            ),
+            favorite_foods: (favoriteCategoriesResult.data || []).map(
+              (fc: any) =>
+                fc.food_categories?.label || fc.food_categories?.key || ""
+            ),
+            dislikes: (dislikedCategoriesResult.data || []).map(
+              (dc: any) =>
+                dc.food_categories?.label || dc.food_categories?.key || ""
+            ),
+          });
+        }
+
+        // Fetch location hours
+        const { data: hoursData } = await supabase
+          .from("location_hours")
+          .select("id, day_of_week, open_time, close_time, is_closed")
+          .eq("location_id", locationId)
+          .order("day_of_week", { ascending: true });
+
+        if (hoursData) {
+          setLocationHours((hoursData as LocationHours[]) || []);
+        }
+
+        // Fetch office staff
+        const { data: staffRoles } = await supabase
+          .from("user_roles")
+          .select(
+            "role, profiles(id, full_name, email, phone, user_type, default_company_id, default_location_id, status, created_at, updated_at)"
+          )
+          .eq("location_id", locationId)
+          .in("role", ["location_admin", "office_staff", "scheduler"])
+          .eq("status", "active");
+
+        if (staffRoles && staffRoles.length > 0) {
+          const staff: User[] = staffRoles
+            .filter((role: any) => role.profiles)
+            .map((role: any) => role.profiles as User);
+          setOfficeStaff(staff);
+        }
+      } catch (error) {
+        console.error("Error loading location data:", error);
+      } finally {
+        setLoadingLocation(false);
+      }
+    },
+    [user]
+  );
+
+  // Reset location data when meeting id changes
   useEffect(() => {
+    if (id) {
+      setLoadedLocationId(null);
+      setPractitioners([]);
+      setPreferredMeetingTimes(null);
+      setFoodPreferences(null);
+      setLocationHours([]);
+      setOfficeStaff([]);
+    }
+  }, [id]);
+
+  // Use useEffect to handle data fetching when id becomes available
+  useEffect(() => {
+    // Only proceed if we have a valid id from navigation params
+    if (!id || typeof id !== "string") {
+      return;
+    }
+
+    // Prefetch calendar data if meeting not found in cache
     if (!meeting && id) {
       prefetchTabData("calendar").catch((error) =>
         console.error("Error prefetching meeting details:", error)
       );
     }
-  }, [meeting, id, prefetchTabData]);
 
-  if (!id) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <Text className="text-gray-600">Meeting not found</Text>
-      </View>
-    );
-  }
+    // Load location data when meeting and user are available
+    // Only load if we haven't already loaded data for this location
+    if (
+      meeting?.location_id &&
+      user &&
+      meeting.location_id !== loadedLocationId
+    ) {
+      setLoadedLocationId(meeting.location_id);
+      loadLocationData(meeting.location_id);
+    }
+  }, [id, meeting, user, prefetchTabData, loadLocationData, loadedLocationId]);
 
   if (!meeting) {
     return (
@@ -69,8 +273,8 @@ export default function MeetingDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      <View className="p-6">
-        <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
+      <View>
+        <View className="bg-white p-4 shadow-sm">
           <View className="flex-row items-center mb-3">
             <View className="bg-blue-100 rounded-lg p-2 mr-3">
               <CalendarIcon size={20} color="#0086c9" />
@@ -113,97 +317,235 @@ export default function MeetingDetailScreen() {
 
           {meeting.description && (
             <View className="mt-3 pt-3 border-t border-gray-100">
-              <Text className="text-gray-900 font-medium mb-1">Description</Text>
-              <Text className="text-gray-600 text-sm">{meeting.description}</Text>
-            </View>
-          )}
-          {meeting.notes && (
-            <View className="mt-3 pt-3 border-t border-gray-100">
-              <Text className="text-gray-900 font-medium mb-1">Notes</Text>
-              <Text className="text-gray-600 text-sm">{meeting.notes}</Text>
+              <Text className="text-gray-900 font-medium mb-1">
+                Description
+              </Text>
+              <Text className="text-gray-600 text-sm">
+                {meeting.description}
+              </Text>
             </View>
           )}
         </View>
-
-        {/* Note: Practitioners and food preferences would come from location, not meeting directly */}
-          <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
-            <View className="flex-row items-center mb-3">
-              <UserIcon size={20} color="#0086c9" />
-              <Text className="text-lg font-semibold text-gray-900 ml-2">
-                Practitioners
-              </Text>
-            </View>
-            {office.practitioners.map((practitioner) => (
-              <View key={practitioner.id} className="mb-2">
-                <Text className="text-gray-900 font-medium">
-                  {practitioner.name}
-                </Text>
-                <Text className="text-gray-500 text-sm">
-                  {practitioner.title} • {practitioner.specialty}
-                </Text>
-              </View>
-            ))}
+        {/* Location Information Cards */}
+        {loadingLocation ? (
+          <View className="bg-white rounded-xl p-8 items-center mb-4">
+            <ActivityIndicator size="small" color="#0086c9" />
+            <Text className="text-gray-500 mt-2 text-sm">
+              Loading location details...
+            </Text>
           </View>
-        )}
-
-        {office?.food_preferences && (
-          <View className="bg-white rounded-xl p-4 mb-6 shadow-sm">
-            <View className="flex-row items-center mb-3">
-              <UtensilsIcon size={20} color="#0086c9" />
-              <Text className="text-lg font-semibold text-gray-900 ml-2">
-                Food Preferences
-              </Text>
-            </View>
-
-            {office.food_preferences.dietary_restrictions.length > 0 && (
-              <View className="mb-3">
-                <Text className="text-gray-900 font-medium mb-1">
-                  Dietary Restrictions
-                </Text>
-                {office.food_preferences.dietary_restrictions.map(
-                  (restriction, index) => (
-                    <Text key={index} className="text-gray-600 text-sm ml-2">
-                      • {restriction}
+        ) : (
+          <>
+            {/* Practitioners Section */}
+            {practitioners.length > 0 && (
+              <View className="bg-white rounded-xl p-4 shadow-sm m-4">
+                <View className="flex-row items-center mb-3">
+                  <UserIcon size={20} color="#0086c9" />
+                  <Text className="text-lg font-semibold text-gray-900 ml-2">
+                    Medical Practitioners
+                  </Text>
+                </View>
+                {practitioners.map((practitioner, index) => (
+                  <View
+                    key={practitioner.id}
+                    className={`py-3 ${
+                      index < practitioners.length - 1
+                        ? "border-b border-gray-100"
+                        : ""
+                    }`}
+                  >
+                    <Text className="text-gray-900 font-medium">
+                      {practitioner.first_name} {practitioner.last_name}
+                      {practitioner.title ? `, ${practitioner.title}` : ""}
                     </Text>
-                  )
+                    {practitioner.specialty && (
+                      <Text className="text-gray-600 text-sm mt-1">
+                        {practitioner.specialty}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Location Hours */}
+            {locationHours.length > 0 && (
+              <View className="bg-white rounded-xl p-4 shadow-sm mb-4 mx-4">
+                <View className="flex-row items-center mb-3">
+                  <ClockIcon size={20} color="#0086c9" />
+                  <Text className="text-lg font-semibold text-gray-900 ml-2">
+                    Location Hours
+                  </Text>
+                </View>
+                {locationHours.map((hour) => {
+                  const dayNames = [
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                  ];
+                  const formatTime = (time: string | null): string => {
+                    if (!time) return "";
+                    const [hours, minutes] = time.split(":");
+                    const hour = parseInt(hours, 10);
+                    const ampm = hour >= 12 ? "PM" : "AM";
+                    const displayHour = hour % 12 || 12;
+                    return `${displayHour}:${minutes} ${ampm}`;
+                  };
+                  return (
+                    <View
+                      key={hour.id}
+                      className="flex-row justify-between items-center py-2 border-b border-gray-100 last:border-b-0"
+                    >
+                      <Text className="text-gray-900 font-medium">
+                        {dayNames[hour.day_of_week]}
+                      </Text>
+                      {hour.is_closed ? (
+                        <Text className="text-gray-500 text-sm">Closed</Text>
+                      ) : (
+                        <Text className="text-gray-600 text-sm">
+                          {formatTime(hour.open_time)} -{" "}
+                          {formatTime(hour.close_time)}
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Preferred Meeting Times */}
+            {preferredMeetingTimes && (
+              <View className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm">
+                <View className="flex-row items-center mb-3">
+                  <CalendarIcon size={20} color="#0086c9" />
+                  <Text className="text-lg font-semibold text-gray-900 ml-2">
+                    Preferred Meeting Times
+                  </Text>
+                </View>
+                {[
+                  { key: "monday", label: "Monday" },
+                  { key: "tuesday", label: "Tuesday" },
+                  { key: "wednesday", label: "Wednesday" },
+                  { key: "thursday", label: "Thursday" },
+                  { key: "friday", label: "Friday" },
+                ].map((day) => {
+                  const times =
+                    preferredMeetingTimes[
+                      day.key as keyof PreferredMeetingTimes
+                    ];
+                  if (!times || times.length === 0) return null;
+                  return (
+                    <View key={day.key} className="py-2">
+                      <Text className="text-gray-900 font-medium">
+                        {day.label}
+                      </Text>
+                      {times.map((time, idx) => (
+                        <Text
+                          key={idx}
+                          className="text-gray-600 text-sm ml-2 mt-1"
+                        >
+                          • {time}
+                        </Text>
+                      ))}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Food Preferences */}
+            {foodPreferences && (
+              <View className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm">
+                <View className="flex-row items-center mb-3">
+                  <UtensilsIcon size={20} color="#0086c9" />
+                  <Text className="text-lg font-semibold text-gray-900 ml-2">
+                    Food Preferences
+                  </Text>
+                </View>
+
+                {foodPreferences.dietary_restrictions.length > 0 && (
+                  <View className="mb-3">
+                    <Text className="text-gray-900 font-medium mb-1">
+                      Dietary Restrictions
+                    </Text>
+                    {foodPreferences.dietary_restrictions.map(
+                      (restriction, idx) => (
+                        <Text key={idx} className="text-gray-600 text-sm ml-2">
+                          • {restriction}
+                        </Text>
+                      )
+                    )}
+                  </View>
+                )}
+
+                {foodPreferences.favorite_foods.length > 0 && (
+                  <View className="mb-3">
+                    <Text className="text-gray-900 font-medium mb-1">
+                      Favorite Foods
+                    </Text>
+                    <View className="flex-row flex-wrap">
+                      {foodPreferences.favorite_foods.map((food, idx) => (
+                        <View
+                          key={idx}
+                          className="bg-green-100 rounded-full px-3 py-1 mr-2 mb-2"
+                        >
+                          <Text className="text-green-800 text-sm">{food}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {foodPreferences.dislikes.length > 0 && (
+                  <View>
+                    <Text className="text-gray-900 font-medium mb-1">
+                      Dislikes
+                    </Text>
+                    <View className="flex-row flex-wrap">
+                      {foodPreferences.dislikes.map((dislike, idx) => (
+                        <View
+                          key={idx}
+                          className="bg-red-100 rounded-full px-3 py-1 mr-2 mb-2"
+                        >
+                          <Text className="text-red-800 text-sm">
+                            {dislike}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
                 )}
               </View>
             )}
 
-            {office.food_preferences.favorite_foods.length > 0 && (
-              <View className="mb-3">
-                <Text className="text-gray-900 font-medium mb-1">
-                  Favorite Foods
+            {/* Office Staff */}
+            {officeStaff.length > 0 && (
+              <View className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm">
+                <Text className="text-lg font-semibold text-gray-900 mb-3">
+                  Office Staff
                 </Text>
-                <View className="flex-row flex-wrap">
-                  {office.food_preferences.favorite_foods.map((food, index) => (
-                    <View
-                      key={index}
-                      className="bg-green-100 rounded-full px-3 py-1 mr-2 mb-2"
-                    >
-                      <Text className="text-green-800 text-sm">{food}</Text>
-                    </View>
-                  ))}
-                </View>
+                {officeStaff.map((staff, index) => (
+                  <View
+                    key={staff.id}
+                    className={`py-2 ${
+                      index < officeStaff.length - 1
+                        ? "border-b border-gray-100"
+                        : ""
+                    }`}
+                  >
+                    <Text className="text-gray-900 font-medium">
+                      {staff.full_name}
+                    </Text>
+                    <Text className="text-gray-600 text-sm">{staff.email}</Text>
+                  </View>
+                ))}
               </View>
             )}
-
-            {office.food_preferences.dislikes.length > 0 && (
-              <View>
-                <Text className="text-gray-900 font-medium mb-1">Dislikes</Text>
-                <View className="flex-row flex-wrap">
-                  {office.food_preferences.dislikes.map((item, index) => (
-                    <View
-                      key={index}
-                      className="bg-red-100 rounded-full px-3 py-1 mr-2 mb-2"
-                    >
-                      <Text className="text-red-800 text-sm">{item}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
+          </>
         )}
       </View>
     </ScrollView>

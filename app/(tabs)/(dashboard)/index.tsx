@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
@@ -82,9 +82,9 @@ function DashboardScreen() {
         paddingTop: insets.top,
       }}
     >
-      <View className="p-6">
-        <View className="mb-6">
-          <Text className="text-3xl font-bold text-gray-900 mb-1">
+      <View className="p-4">
+        <View className="mb-4">
+          <Text className="text-3xl font-bold text-gray-900">
             Welcome back,
           </Text>
           <Text className="text-3xl font-bold" style={{ color: "#0086c9" }}>
@@ -115,7 +115,7 @@ function DashboardScreen() {
           onPress={() => router.push("/book-meeting")}
         >
           <Text className="text-white text-center font-semibold text-lg">
-            Book New Meeting
+            Book a meeting
           </Text>
         </TouchableOpacity>
 
@@ -133,73 +133,71 @@ function DashboardScreen() {
             </View>
           ) : (
             upcomingMeetings.map((meeting) => (
-              <Link
+              <TouchableOpacity
                 key={meeting.id}
-                href={{
-                  pathname: "/(tabs)/(dashboard)/meeting-detail",
-                  params: { id: meeting.id },
+                className="bg-white rounded-xl p-4 mb-3 shadow-sm"
+                activeOpacity={0.9}
+                onPress={() => {
+                  router.push({
+                    pathname: "/(tabs)/(dashboard)/meeting-detail",
+                    params: { id: meeting.id },
+                  });
                 }}
-                asChild
               >
-                <TouchableOpacity
-                  className="bg-white rounded-xl p-4 mb-3 shadow-sm"
-                  activeOpacity={0.9}
-                >
-                  <View className="flex-row items-center mb-2">
-                    <View className="bg-blue-100 rounded-lg p-2 mr-3">
-                      <CalendarIcon size={20} color="#0086c9" />
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-lg font-semibold text-gray-900">
-                        {meeting.location?.name || meeting.title || "Meeting"}
-                      </Text>
-                    </View>
+                <View className="flex-row items-center mb-2">
+                  <View className="bg-blue-100 rounded-lg p-2 mr-3">
+                    <CalendarIcon size={20} color="#0086c9" />
                   </View>
-
-                  <View className="flex-row items-center mb-2 ml-11">
-                    <ClockIcon size={16} color="#6b7280" />
-                    <Text className="text-gray-600 ml-2">
-                      {format(new Date(meeting.start_at), "EEEE, MMMM d, yyyy")}
+                  <View className="flex-1">
+                    <Text className="text-lg font-semibold text-gray-900">
+                      {meeting.location?.name || meeting.title || "Meeting"}
                     </Text>
                   </View>
+                </View>
 
-                  <View className="flex-row items-center mb-2 ml-11">
-                    <ClockIcon size={16} color="#6b7280" />
-                    <Text className="text-gray-600 ml-2">
-                      {format(new Date(meeting.start_at), "h:mm a")}
-                      {meeting.end_at
-                        ? ` - ${format(new Date(meeting.end_at), "h:mm a")}`
+                <View className="flex-row items-center mb-2 ml-11">
+                  <ClockIcon size={16} color="#6b7280" />
+                  <Text className="text-gray-600 ml-2">
+                    {format(new Date(meeting.start_at), "EEEE, MMMM d, yyyy")}
+                  </Text>
+                </View>
+
+                <View className="flex-row items-center mb-2 ml-11">
+                  <ClockIcon size={16} color="#6b7280" />
+                  <Text className="text-gray-600 ml-2">
+                    {format(new Date(meeting.start_at), "h:mm a")}
+                    {meeting.end_at
+                      ? ` - ${format(new Date(meeting.end_at), "h:mm a")}`
+                      : ""}
+                    {meeting.end_at &&
+                      ` • ${Math.round(
+                        (new Date(meeting.end_at).getTime() -
+                          new Date(meeting.start_at).getTime()) /
+                          60000
+                      )} minutes`}
+                  </Text>
+                </View>
+
+                {meeting.location?.address_line1 && (
+                  <View className="flex-row items-center ml-11">
+                    <MapPinIcon size={16} color="#6b7280" />
+                    <Text className="text-gray-500 ml-2 flex-1">
+                      {meeting.location.address_line1}
+                      {meeting.location.city
+                        ? `, ${meeting.location.city}`
                         : ""}
-                      {meeting.end_at &&
-                        ` • ${Math.round(
-                          (new Date(meeting.end_at).getTime() -
-                            new Date(meeting.start_at).getTime()) /
-                            60000
-                        )} minutes`}
                     </Text>
                   </View>
+                )}
 
-                  {meeting.location?.address_line1 && (
-                    <View className="flex-row items-center ml-11">
-                      <MapPinIcon size={16} color="#6b7280" />
-                      <Text className="text-gray-500 ml-2 flex-1">
-                        {meeting.location.address_line1}
-                        {meeting.location.city
-                          ? `, ${meeting.location.city}`
-                          : ""}
-                      </Text>
-                    </View>
-                  )}
-
-                  {meeting.description && (
-                    <View className="mt-3 pt-3 border-t border-gray-100 ml-11">
-                      <Text className="text-gray-600 text-sm">
-                        {meeting.description}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Link>
+                {meeting.description && (
+                  <View className="mt-3 pt-3 border-t border-gray-100 ml-11">
+                    <Text className="text-gray-600 text-sm">
+                      {meeting.description}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
             ))
           )}
         </View>

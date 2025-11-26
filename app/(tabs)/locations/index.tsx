@@ -100,7 +100,7 @@ function LocationsScreen() {
             return (
               <View
                 key={location.id}
-                className="bg-white rounded-xl mb-3 shadow-sm overflow-hidden"
+                className="bg-white border border-gray-300 mb-3 shadow-sm rounded-xl overflow-hidden"
               >
                 <TouchableOpacity
                   activeOpacity={0.7}

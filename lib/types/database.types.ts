@@ -103,28 +103,37 @@ export interface UserRole {
   updated_at: string;
 }
 
-// Provider table structure from Supabase
-export interface Provider {
+// // Provider table structure from Supabase
+// export interface Provider {
+//   id: string;
+//   location_id: string;
+//   profile_id: string | null;
+//   first_name: string;
+//   last_name: string;
+//   credential: string | null;
+//   specialty: string | null;
+//   email: string | null;
+//   phone: string | null;
+//   status: string;
+//   created_at: string;
+//   updated_at: string;
+// }
+
+// Practitioner interface for UI (mapped from Provider)
+export interface Practitioner {
   id: string;
   location_id: string;
   profile_id: string | null;
   first_name: string;
   last_name: string;
   credential: string | null;
+  title: string;
   specialty: string | null;
   email: string | null;
   phone: string | null;
   status: string;
   created_at: string;
   updated_at: string;
-}
-
-// Practitioner interface for UI (mapped from Provider)
-export interface Practitioner {
-  id: string;
-  name: string;
-  title: string;
-  specialty: string;
 }
 
 // Location Preferred Time Slot from Supabase
@@ -272,10 +281,10 @@ export interface Database {
         Insert: Omit<UserRole, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<UserRole, 'id' | 'created_at' | 'updated_at'>>;
       };
-      providers: {
-        Row: Provider;
-        Insert: Omit<Provider, 'id' | 'created_at' | 'updated_at'>;
-        Update: Partial<Omit<Provider, 'id' | 'created_at' | 'updated_at'>>;
+      practitioners: {
+        Row: Practitioner;
+        Insert: Omit<Practitioner, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Practitioner, 'id' | 'created_at' | 'updated_at'>>;
       };
       location_hours: {
         Row: LocationHours;

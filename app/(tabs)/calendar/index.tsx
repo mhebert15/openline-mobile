@@ -321,7 +321,7 @@ function CalendarScreen() {
           onPress={() => router.push("/book-meeting")}
         >
           <Text className="text-white font-semibold text-lg">
-            Book New Meeting
+            Book a meeting
           </Text>
         </TouchableOpacity>
       </View>

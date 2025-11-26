@@ -227,10 +227,129 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: true,
               }));
 
-              const [upcomingMeetings, completedCount] = await Promise.all([
-                mockMeetingsService.getUpcomingMeetings(user.id),
-                mockMeetingsService.getCompletedMeetingsCount(user.id),
-              ]);
+              // Get user's medical_rep_id if they're a medical rep
+              let medicalRepId: string | null = null;
+              if (user.user_type === "medical_rep") {
+                const { data: medicalRep } = await supabase
+                  .from("medical_reps")
+                  .select("id")
+                  .eq("profile_id", user.id)
+                  .eq("status", "active")
+                  .maybeSingle();
+
+                if (medicalRep && (medicalRep as { id: string }).id) {
+                  medicalRepId = (medicalRep as { id: string }).id;
+                }
+              }
+
+              const now = new Date().toISOString();
+
+              // Fetch upcoming meetings (pending or approved, start_at in future)
+              // Include location data in the query
+              let upcomingMeetingsQuery = supabase
+                .from("meetings")
+                .select(
+                  "id, location_id, medical_rep_id, requested_by_profile_id, provider_id, food_preferences_id, meeting_type, title, description, start_at, end_at, status, auto_approved, approved_by_profile_id, approved_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone)"
+                )
+                .in("status", ["pending", "approved"])
+                .gte("start_at", now)
+                .order("start_at", { ascending: true });
+
+              // Filter by medical_rep_id if user is a medical rep
+              if (medicalRepId) {
+                upcomingMeetingsQuery = upcomingMeetingsQuery.eq(
+                  "medical_rep_id",
+                  medicalRepId
+                );
+              } else if (user.user_type !== "admin") {
+                // If not admin and not medical rep, filter by requested_by_profile_id
+                upcomingMeetingsQuery = upcomingMeetingsQuery.eq(
+                  "requested_by_profile_id",
+                  user.id
+                );
+              }
+
+              const { data: upcomingMeetingsData, error: upcomingError } =
+                await upcomingMeetingsQuery;
+
+              if (upcomingError) {
+                console.error(
+                  "Error fetching upcoming meetings:",
+                  upcomingError
+                );
+              }
+
+              // Fetch completed meetings count
+              let completedCountQuery = supabase
+                .from("meetings")
+                .select("id", { count: "exact", head: true })
+                .eq("status", "completed");
+
+              if (medicalRepId) {
+                completedCountQuery = completedCountQuery.eq(
+                  "medical_rep_id",
+                  medicalRepId
+                );
+              } else if (user.user_type !== "admin") {
+                completedCountQuery = completedCountQuery.eq(
+                  "requested_by_profile_id",
+                  user.id
+                );
+              }
+
+              const { count: completedCount, error: completedError } =
+                await completedCountQuery;
+
+              if (completedError) {
+                console.error(
+                  "Error fetching completed meetings count:",
+                  completedError
+                );
+              }
+
+              // Map the data to include location
+              const upcomingMeetings: Meeting[] = (
+                upcomingMeetingsData || []
+              ).map((m: any) => ({
+                id: m.id,
+                location_id: m.location_id,
+                medical_rep_id: m.medical_rep_id,
+                requested_by_profile_id: m.requested_by_profile_id,
+                provider_id: m.provider_id,
+                food_preferences_id: m.food_preferences_id,
+                meeting_type: m.meeting_type,
+                title: m.title,
+                description: m.description,
+                start_at: m.start_at,
+                end_at: m.end_at,
+                status: m.status,
+                auto_approved: m.auto_approved,
+                approved_by_profile_id: m.approved_by_profile_id,
+                approved_at: m.approved_at,
+                created_at: m.created_at,
+                updated_at: m.updated_at,
+                location: m.locations
+                  ? {
+                      id: m.locations.id,
+                      company_id: "", // Not fetched, but required by type
+                      name: m.locations.name,
+                      address_line1: m.locations.address_line1,
+                      address_line2: m.locations.address_line2,
+                      city: m.locations.city,
+                      state: m.locations.state,
+                      postal_code: m.locations.postal_code,
+                      country: "", // Not fetched, but required by type
+                      timezone: null,
+                      phone: m.locations.phone,
+                      status: m.locations.status || "active",
+                      created_at: "",
+                      updated_at: "",
+                      deleted_at: null,
+                      created_by: null,
+                      updated_by: null,
+                    }
+                  : undefined,
+              }));
 
               // Update cache
               updateCacheEntry(tabName, "upcomingMeetings", () => ({
@@ -239,7 +358,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: false,
               }));
               updateCacheEntry(tabName, "completedCount", () => ({
-                data: completedCount,
+                data: completedCount || 0,
                 timestamp: Date.now(),
                 loading: false,
               }));

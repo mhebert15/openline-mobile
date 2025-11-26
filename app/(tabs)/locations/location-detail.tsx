@@ -39,7 +39,7 @@ export default function LocationDetailScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const [location, setLocation] = useState<MedicalOffice | null>(null);
-  const [adminUser, setAdminUser] = useState<User | null>(null);
+  const [officeStaff, setOfficeStaff] = useState<User[]>([]);
   const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +124,7 @@ export default function LocationDetailScreen() {
       const { data: providersData, error: providersError } = await supabase
         .from("locations")
         .select(
-          "id, providers(id, first_name, last_name, credential, specialty, status)"
+          "id, providers(id, location_id, profile_id, first_name, last_name, credential, specialty, email, phone, status, created_at, updated_at)"
         )
         .eq("id", id)
         .single();
@@ -139,14 +139,11 @@ export default function LocationDetailScreen() {
       );
       const practitioners: Practitioner[] = (providersList as any[]).map(
         (p: any) => ({
-          id: p.id,
-          name: `${p.first_name} ${p.last_name}`,
-          title: p.credential || "",
-          specialty: p.specialty || "",
+          ...p,
+          location_id: p.location_id || id, // location_id might not be in nested query
+          title: p.credential || "", // Add the derived title field
         })
       );
-
-      console.log("Fetched practitioners:", practitioners.length);
 
       // Fetch preferred meeting times
       // Query through locations join to avoid RLS recursion on location_preferred_time_slots table
@@ -269,36 +266,29 @@ export default function LocationDetailScreen() {
         console.log("Fetched location hours:", hoursData?.length || 0);
       }
 
-      // Fetch location admin
-      const { data: adminRole, error: adminRoleError } = await supabase
+      // Fetch all office staff (location_admin, office_staff, scheduler)
+      const { data: staffRoles, error: staffRolesError } = await supabase
         .from("user_roles")
-        .select("profile_id, profiles(id, full_name, email)")
+        .select(
+          "role, profiles(id, full_name, email, phone, user_type, default_company_id, default_location_id, status, created_at, updated_at)"
+        )
         .eq("location_id", id)
-        .eq("role", "location_admin")
-        .eq("status", "active")
-        .maybeSingle();
+        .in("role", ["location_admin", "office_staff", "scheduler"])
+        .eq("status", "active");
 
-      if (adminRoleError) {
-        console.error("Error fetching admin role:", adminRoleError);
+      if (staffRolesError) {
+        console.error("Error fetching office staff:", staffRolesError);
       }
 
-      if (adminRole && (adminRole as any).profiles) {
-        const profile = (adminRole as any).profiles;
-        setAdminUser({
-          id: profile.id,
-          email: profile.email,
-          full_name: profile.full_name,
-          phone: profile.phone || null,
-          user_type: profile.user_type || "admin",
-          default_company_id: profile.default_company_id || null,
-          default_location_id: profile.default_location_id || null,
-          status: profile.status || "active",
-          created_at: profile.created_at || new Date().toISOString(),
-          updated_at: profile.updated_at || new Date().toISOString(),
-        });
-        console.log("Fetched admin user:", profile.full_name);
+      if (staffRoles && staffRoles.length > 0) {
+        const staff: User[] = staffRoles
+          .filter((role: any) => role.profiles)
+          .map((role: any) => role.profiles as User);
+        setOfficeStaff(staff);
+        console.log("Fetched office staff:", staff.length);
       } else {
-        console.log("No admin user found for location");
+        setOfficeStaff([]);
+        console.log("No office staff found for location");
       }
 
       // Build the location object
@@ -320,7 +310,9 @@ export default function LocationDetailScreen() {
           ? preferredMeetingTimes
           : undefined,
         food_preferences: foodPreferences,
-        admin_user_id: adminRole ? (adminRole as any).profile_id : undefined,
+        admin_user_id:
+          officeStaff.find((s) => s.user_type === "admin")?.id ||
+          officeStaff[0]?.id,
       };
 
       console.log("Final location object:", {
@@ -343,13 +335,17 @@ export default function LocationDetailScreen() {
   const handleSendMessage = useCallback(async () => {
     if (!location || !user) return;
 
-    // Check for existing message thread with location admin
-    if (adminUser) {
+    // Use the first office staff member (prefer admin if available)
+    const primaryContact =
+      officeStaff.find((s) => s.user_type === "admin") || officeStaff[0];
+
+    if (primaryContact) {
+      // Check for existing message thread with primary contact
       const { data: existingMessage } = await supabase
         .from("messages")
         .select("id, location_id, sender_profile_id, recipient_profile_id")
         .or(
-          `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${adminUser.id}),and(sender_profile_id.eq.${adminUser.id},recipient_profile_id.eq.${user.id})`
+          `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${primaryContact.id}),and(sender_profile_id.eq.${primaryContact.id},recipient_profile_id.eq.${user.id})`
         )
         .eq("location_id", location.id)
         .order("created_at", { ascending: false })
@@ -362,34 +358,31 @@ export default function LocationDetailScreen() {
           params: {
             officeId: location.id,
             officeName: location.name,
-            participantIds: adminUser.id,
-            participantNames: adminUser.full_name,
-            primaryParticipantId: adminUser.id,
+            participantIds: primaryContact.id,
+            participantNames: primaryContact.full_name,
+            primaryParticipantId: primaryContact.id,
             fromLocation: "true",
             locationId: location.id,
           },
         });
         return;
       }
-    }
 
-    if (!adminUser) {
-      Alert.alert("Error", "Admin contact not available");
-      return;
+      router.push({
+        pathname: "/compose-message",
+        params: {
+          officeId: location.id,
+          officeName: location.name,
+          participantId: primaryContact.id,
+          participantName: primaryContact.full_name,
+          fromLocation: "true",
+          locationId: location.id,
+        },
+      });
+    } else {
+      Alert.alert("Error", "No office staff contact available");
     }
-
-    router.push({
-      pathname: "/compose-message",
-      params: {
-        officeId: location.id,
-        officeName: location.name,
-        participantId: adminUser.id,
-        participantName: adminUser.full_name,
-        fromLocation: "true",
-        locationId: location.id,
-      },
-    });
-  }, [adminUser, location, router, user]);
+  }, [officeStaff, location, router, user]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -494,11 +487,14 @@ export default function LocationDetailScreen() {
                   }`}
                 >
                   <Text className="text-gray-900 font-medium">
-                    {practitioner.name}, {practitioner.title}
+                    {practitioner.first_name} {practitioner.last_name}
+                    {practitioner.title ? `, ${practitioner.title}` : ""}
                   </Text>
-                  <Text className="text-gray-600 text-sm mt-1">
-                    {practitioner.specialty}
-                  </Text>
+                  {practitioner.specialty && (
+                    <Text className="text-gray-600 text-sm mt-1">
+                      {practitioner.specialty}
+                    </Text>
+                  )}
                 </View>
               ))}
             </View>
@@ -633,14 +629,27 @@ export default function LocationDetailScreen() {
             </View>
           )}
 
-          {/* Office Admin Contact */}
-          {adminUser && (
+          {/* Office Staff */}
+          {officeStaff.length > 0 && (
             <View className="bg-white rounded-xl p-4 mb-4 shadow-sm">
-              <Text className="text-lg font-semibold text-gray-900 mb-2">
-                Office Administrator
+              <Text className="text-lg font-semibold text-gray-900 mb-3">
+                Office Staff
               </Text>
-              <Text className="text-gray-900">{adminUser.full_name}</Text>
-              <Text className="text-gray-600 text-sm">{adminUser.email}</Text>
+              {officeStaff.map((staff, index) => (
+                <View
+                  key={staff.id}
+                  className={`py-2 ${
+                    index < officeStaff.length - 1
+                      ? "border-b border-gray-100"
+                      : ""
+                  }`}
+                >
+                  <Text className="text-gray-900 font-medium">
+                    {staff.full_name}
+                  </Text>
+                  <Text className="text-gray-600 text-sm">{staff.email}</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -651,11 +660,11 @@ export default function LocationDetailScreen() {
         <TouchableOpacity
           className="rounded-xl p-4 flex-row items-center justify-center mb-3"
           style={{ backgroundColor: "#0086c9" }}
-          onPress={handleBookMeeting}
+          onPress={() => router.push("/(tabs)/(dashboard)/book-meeting")}
         >
           <CalendarIcon size={20} color="white" />
           <Text className="text-white font-semibold text-lg ml-2">
-            Book Meeting
+            Book a meeting
           </Text>
         </TouchableOpacity>
       </View>
