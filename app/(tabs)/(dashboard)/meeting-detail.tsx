@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import {
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  Pressable,
+  Alert,
+} from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { format } from "date-fns";
 import {
   CalendarIcon,
@@ -24,7 +31,8 @@ import { mockMeetings, mockOffices } from "@/lib/mock/data";
 
 export default function MeetingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { cache, prefetchTabData } = useDataCache();
+  const router = useRouter();
+  const { cache, prefetchTabData, invalidateTab } = useDataCache();
   const { user } = useAuth();
 
   const [practitioners, setPractitioners] = useState<Practitioner[]>([]);
@@ -36,6 +44,7 @@ export default function MeetingDetailScreen() {
   const [officeStaff, setOfficeStaff] = useState<User[]>([]);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loadedLocationId, setLoadedLocationId] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
 
   const meetingsFromCache = useMemo(() => {
     const dashboardMeetings =
@@ -253,6 +262,90 @@ export default function MeetingDetailScreen() {
     }
   }, [id, meeting, user, prefetchTabData, loadLocationData, loadedLocationId]);
 
+  const handleCancelMeeting = async () => {
+    if (!meeting?.id) return;
+
+    try {
+      setCanceling(true);
+      const { error } = await supabase
+        .from("meetings")
+        .delete()
+        .eq("id", meeting.id);
+
+      if (error) {
+        console.error("Error canceling meeting:", error);
+        Alert.alert("Error", "Failed to cancel meeting. Please try again.");
+        setCanceling(false);
+        return;
+      }
+
+      // Invalidate cache to refresh data
+      invalidateTab("dashboard");
+      invalidateTab("calendar");
+
+      // Navigate back to dashboard
+      router.back();
+    } catch (error) {
+      console.error("Error canceling meeting:", error);
+      Alert.alert("Error", "Failed to cancel meeting. Please try again.");
+    } finally {
+      setCanceling(false);
+    }
+  };
+
+  const showCancelConfirmation = () => {
+    Alert.alert(
+      "Cancel Meeting",
+      "Are you sure you want to cancel this meeting? This action cannot be undone.",
+      [
+        {
+          text: "No, Keep Meeting",
+          style: "cancel",
+        },
+        {
+          text: "Yes, Cancel Meeting",
+          style: "destructive",
+          onPress: handleCancelMeeting,
+        },
+      ]
+    );
+  };
+
+  // Placeholder card component for loading states
+  const PlaceholderCard = ({
+    hasIcon = true,
+    rowCount = 3,
+    className = "bg-white rounded-xl p-4 shadow-sm mb-4 mx-4",
+  }: {
+    hasIcon?: boolean;
+    rowCount?: number;
+    className?: string;
+  }) => (
+    <View className={className}>
+      <View className="flex-row items-center mb-3">
+        {hasIcon && <View className="w-5 h-5 bg-gray-200 rounded mr-2" />}
+        <View
+          className="h-5 bg-gray-200 rounded flex-1"
+          style={{ maxWidth: 200 }}
+        />
+      </View>
+      {Array.from({ length: rowCount }).map((_, index) => (
+        <View
+          key={index}
+          className={`py-2 ${
+            index < rowCount - 1 ? "border-b border-gray-100" : ""
+          }`}
+        >
+          <View
+            className="h-4 bg-gray-200 rounded mb-1"
+            style={{ width: "70%" }}
+          />
+          <View className="h-3 bg-gray-200 rounded" style={{ width: "50%" }} />
+        </View>
+      ))}
+    </View>
+  );
+
   if (!meeting) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -328,12 +421,42 @@ export default function MeetingDetailScreen() {
         </View>
         {/* Location Information Cards */}
         {loadingLocation ? (
-          <View className="bg-white rounded-xl p-8 items-center mb-4">
-            <ActivityIndicator size="small" color="#0086c9" />
-            <Text className="text-gray-500 mt-2 text-sm">
-              Loading location details...
-            </Text>
-          </View>
+          <>
+            {/* Practitioners Placeholder */}
+            <PlaceholderCard
+              hasIcon={true}
+              rowCount={2}
+              className="bg-white rounded-xl p-4 shadow-sm m-4"
+            />
+
+            {/* Location Hours Placeholder */}
+            <PlaceholderCard
+              hasIcon={true}
+              rowCount={5}
+              className="bg-white rounded-xl p-4 shadow-sm mb-4 mx-4"
+            />
+
+            {/* Preferred Meeting Times Placeholder */}
+            <PlaceholderCard
+              hasIcon={true}
+              rowCount={3}
+              className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm"
+            />
+
+            {/* Food Preferences Placeholder */}
+            <PlaceholderCard
+              hasIcon={true}
+              rowCount={4}
+              className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm"
+            />
+
+            {/* Office Staff Placeholder */}
+            <PlaceholderCard
+              hasIcon={false}
+              rowCount={2}
+              className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm"
+            />
+          </>
         ) : (
           <>
             {/* Practitioners Section */}
@@ -547,6 +670,23 @@ export default function MeetingDetailScreen() {
             )}
           </>
         )}
+
+        {/* Cancel Meeting Button */}
+        <View className="p-4 pb-8">
+          <Pressable
+            onPress={showCancelConfirmation}
+            className="bg-red-500 rounded-lg py-4 px-6 items-center"
+            disabled={canceling}
+          >
+            {canceling ? (
+              <ActivityIndicator size="small" color="#ffffff" />
+            ) : (
+              <Text className="text-white font-semibold text-base">
+                Cancel Meeting
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );
