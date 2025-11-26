@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,8 +14,13 @@ import { CalendarIcon, ClockIcon, CheckIcon } from "lucide-react-native";
 
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
-import { MedicalOffice, Meeting, TimeSlot } from "@/lib/types/database.types";
-import { mockOfficesService, mockMeetingsService } from "@/lib/mock/services";
+import { supabase } from "@/lib/supabase/client";
+import {
+  MedicalOffice,
+  Meeting,
+  TimeSlot,
+  LocationHours,
+} from "@/lib/types/database.types";
 
 export default function BookMeetingScreen() {
   const insets = useSafeAreaInsets();
@@ -34,6 +39,7 @@ export default function BookMeetingScreen() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [booking, setBooking] = useState(false);
+  const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
 
   useEffect(() => {
     if (
@@ -57,18 +63,74 @@ export default function BookMeetingScreen() {
     }
   }, [locations, selectedLocationId]);
 
+  // Fetch location hours when location changes
+  useEffect(() => {
+    const fetchLocationHours = async () => {
+      if (!selectedLocationId) {
+        setLocationHours([]);
+        return;
+      }
+
+      try {
+        const { data: hoursData, error: hoursError } = await supabase
+          .from("location_hours")
+          .select("id, day_of_week, open_time, close_time, is_closed")
+          .eq("location_id", selectedLocationId)
+          .order("day_of_week", { ascending: true });
+
+        if (hoursError) {
+          console.error("Error fetching location hours:", hoursError);
+          setLocationHours([]);
+          return;
+        }
+
+        setLocationHours((hoursData as LocationHours[]) || []);
+      } catch (error) {
+        console.error("Error fetching location hours:", error);
+        setLocationHours([]);
+      }
+    };
+
+    fetchLocationHours();
+  }, [selectedLocationId]);
+
+  // Helper function to check if a day is open
+  const isDayOpen = useCallback(
+    (dayOfWeek: number): boolean => {
+      const hoursForDay = locationHours.find(
+        (h) => h.day_of_week === dayOfWeek
+      );
+      if (!hoursForDay) return false; // No hours entry means closed
+      return !hoursForDay.is_closed; // Check is_closed flag
+    },
+    [locationHours]
+  );
+
   const dateOptions = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 30 }).map((_, index) => {
+    const allDates = Array.from({ length: 30 }).map((_, index) => {
       const date = addDays(today, index);
+      const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
       return {
         key: format(date, "yyyy-MM-dd"),
         dayLabel: format(date, "EEE"),
         dayNumber: format(date, "d"),
         monthLabel: format(date, "MMM"),
+        dayOfWeek,
       };
     });
-  }, []);
+
+    // Filter out days where the office is closed
+    return allDates.filter((dateOption) => isDayOpen(dateOption.dayOfWeek));
+  }, [isDayOpen]);
+
+  // Reset selected date index if current selection is no longer valid
+  useEffect(() => {
+    if (selectedDateIndex >= dateOptions.length && dateOptions.length > 0) {
+      setSelectedDateIndex(0);
+      setSelectedTime(null);
+    }
+  }, [dateOptions.length, selectedDateIndex]);
 
   const selectedDate = dateOptions[selectedDateIndex]?.key ?? "";
 
@@ -87,35 +149,6 @@ export default function BookMeetingScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    if (selectedLocation && selectedDate) {
-      loadAvailableSlots();
-    }
-  }, [selectedLocation, selectedDate]);
-
-  const loadAvailableSlots = async () => {
-    if (!selectedLocation || !selectedDate) return;
-
-    try {
-      setSlotsLoading(true);
-      const slots = await mockOfficesService.getAvailableSlots(
-        selectedLocation.id,
-        selectedDate
-      );
-      setAvailableSlots(slots);
-    } catch (error) {
-      console.error("Error loading slots:", error);
-      setAvailableSlots([]);
-    } finally {
-      setSlotsLoading(false);
-    }
-  };
-
-  const formatTimeLabel = (time: string) => {
-    const parsed = parse(time, "HH:mm", new Date());
-    return format(parsed, "h:mm a");
-  };
-
   const dayMeetings = useMemo(() => {
     if (!selectedDate) return [] as Meeting[];
     return meetings.filter((meeting) => {
@@ -133,11 +166,220 @@ export default function BookMeetingScreen() {
     );
   }, [dayMeetings]);
 
+  const loadAvailableSlots = React.useCallback(async () => {
+    if (!selectedLocation || !selectedDate) return;
+
+    try {
+      setSlotsLoading(true);
+
+      // Get day of week for the selected date
+      // Parse the date string (format: "yyyy-MM-dd") and get day of week
+      // JavaScript getDay(): 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      const selectedDateObj = new Date(year, month - 1, day); // month is 0-indexed in JS Date
+      const dayOfWeek = selectedDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+      // location_preferred_time_slots uses: 1=Monday, 2=Tuesday, 3=Wednesday, etc. (based on actual DB data)
+      // location_hours uses: 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      // For preferred slots: Monday (JS=1) should be DB=1, Tuesday (JS=2) should be DB=2, etc.
+      // Sunday (JS=0) should not be used (office closed), but if needed would be DB=7 or skip
+      const dbDayOfWeekForPreferred = dayOfWeek === 0 ? null : dayOfWeek; // Use JS day directly (1-6), skip Sunday
+
+      // Fetch location hours for this day
+      const { data: locationHoursData, error: hoursError } = await supabase
+        .from("location_hours")
+        .select("day_of_week, open_time, close_time, is_closed")
+        .eq("location_id", selectedLocation.id)
+        .eq("day_of_week", dayOfWeek) // location_hours uses 0=Sunday format
+        .maybeSingle();
+
+      if (hoursError) {
+        console.error("Error fetching location hours:", hoursError);
+      }
+
+      // Fetch preferred time slots for this location and day of week
+      // Skip if Sunday (dayOfWeek === 0) since offices are closed
+      let preferredSlotsData = null;
+      let slotsError = null;
+
+      if (dbDayOfWeekForPreferred !== null) {
+        const result = await supabase
+          .from("location_preferred_time_slots")
+          .select("id, start_time, end_time, is_active")
+          .eq("location_id", selectedLocation.id)
+          .eq("day_of_week", dbDayOfWeekForPreferred)
+          .eq("is_active", true);
+        preferredSlotsData = result.data;
+        slotsError = result.error;
+      }
+
+      // Debug logging
+      console.log("=== Slot Loading Debug ===");
+      console.log("Selected date:", selectedDate);
+      console.log("Location ID:", selectedLocation.id);
+      console.log(
+        "Day of week (JS):",
+        dayOfWeek,
+        "(0=Sun, 1=Mon, 2=Tue, etc.)"
+      );
+      console.log(
+        "Day of week (DB for preferred):",
+        dbDayOfWeekForPreferred,
+        "(1=Mon, 2=Tue, 3=Wed, etc.)"
+      );
+      console.log("Location hours data:", locationHoursData);
+      console.log("Preferred slots query result:", preferredSlotsData);
+      console.log("Preferred slots error:", slotsError);
+
+      if (slotsError) {
+        console.error("Error fetching preferred time slots:", slotsError);
+        // Don't return early - still generate other slots even if preferred slots fail
+      }
+
+      // Helper function to parse time string to minutes
+      const parseTimeToMinutes = (timeStr: string): number => {
+        const [hour, min] = timeStr.split(":").map(Number);
+        return hour * 60 + min;
+      };
+
+      // Helper function to format minutes to time string
+      const formatMinutesToTime = (minutes: number): string => {
+        const hour = Math.floor(minutes / 60);
+        const min = minutes % 60;
+        return `${String(hour).padStart(2, "0")}:${String(min).padStart(
+          2,
+          "0"
+        )}`;
+      };
+
+      // Get office hours for this day
+      const locationHours = locationHoursData as LocationHours | null;
+      const isClosed =
+        locationHours?.is_closed ||
+        !locationHours?.open_time ||
+        !locationHours?.close_time;
+
+      console.log("Location hours:", locationHours);
+      console.log("Is closed:", isClosed);
+      console.log("Open time:", locationHours?.open_time);
+      console.log("Close time:", locationHours?.close_time);
+
+      // Generate all time slots
+      const allSlots: TimeSlot[] = [];
+      const preferredSlotTimes = new Set<string>();
+
+      // First, generate preferred slots (60-minute increments)
+      if (preferredSlotsData && preferredSlotsData.length > 0) {
+        console.log(
+          "Generating preferred slots from",
+          preferredSlotsData.length,
+          "ranges"
+        );
+        (
+          preferredSlotsData as Array<{ start_time: string; end_time: string }>
+        ).forEach((slot) => {
+          const startTime = slot.start_time;
+          const endTime = slot.end_time;
+
+          const startMinutes = parseTimeToMinutes(startTime);
+          const endMinutes = parseTimeToMinutes(endTime);
+
+          // Generate 60-minute slots within the preferred time range
+          for (
+            let minutes = startMinutes;
+            minutes < endMinutes;
+            minutes += 60
+          ) {
+            const timeString = formatMinutesToTime(minutes);
+
+            // Check if this time slot conflicts with existing meetings
+            const isAvailable = !dayMeetingTimes.includes(timeString);
+
+            preferredSlotTimes.add(timeString);
+
+            allSlots.push({
+              time: timeString,
+              available: isAvailable,
+              preferred: true,
+              clinicianCount: 1,
+            });
+          }
+        });
+      }
+
+      // Generate all other slots within office hours (30-minute increments)
+      if (!isClosed && locationHours?.open_time && locationHours?.close_time) {
+        const openMinutes = parseTimeToMinutes(locationHours.open_time);
+        const closeMinutes = parseTimeToMinutes(locationHours.close_time);
+
+        console.log(
+          "Generating other slots from",
+          formatMinutesToTime(openMinutes),
+          "to",
+          formatMinutesToTime(closeMinutes)
+        );
+
+        // Generate 30-minute slots for the entire day
+        for (let minutes = openMinutes; minutes < closeMinutes; minutes += 30) {
+          const timeString = formatMinutesToTime(minutes);
+
+          // Skip if this is already a preferred slot
+          if (preferredSlotTimes.has(timeString)) {
+            continue;
+          }
+
+          // Check if this time slot conflicts with existing meetings
+          const isAvailable = !dayMeetingTimes.includes(timeString);
+
+          allSlots.push({
+            time: timeString,
+            available: isAvailable,
+            preferred: false,
+            clinicianCount: 1,
+          });
+        }
+      }
+
+      // Sort slots by time
+      allSlots.sort((a, b) => a.time.localeCompare(b.time));
+
+      console.log("Total slots generated:", allSlots.length);
+      console.log(
+        "Preferred slots:",
+        allSlots.filter((s) => s.preferred).length
+      );
+      console.log("Other slots:", allSlots.filter((s) => !s.preferred).length);
+      console.log(
+        "Available slots:",
+        allSlots.filter((s) => s.available).length
+      );
+      console.log("=== End Slot Loading Debug ===");
+
+      setAvailableSlots(allSlots);
+    } catch (error) {
+      console.error("Error loading slots:", error);
+      setAvailableSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [selectedLocation, selectedDate, dayMeetingTimes]);
+
+  useEffect(() => {
+    if (selectedLocation && selectedDate) {
+      loadAvailableSlots();
+    }
+  }, [selectedLocation, selectedDate, loadAvailableSlots]);
+
+  const formatTimeLabel = (time: string) => {
+    const parsed = parse(time, "HH:mm", new Date());
+    return format(parsed, "h:mm a");
+  };
+
   const preferredSlots = availableSlots.filter((slot) => slot.preferred);
   const otherSlots = availableSlots.filter((slot) => !slot.preferred);
 
   const handleBookMeeting = async () => {
-    if (!selectedLocation || !selectedDate || !selectedTime) {
+    if (!selectedLocation || !selectedDate || !selectedTime || !user) {
       Alert.alert(
         "Select Meeting Details",
         "Choose a location, date, and time to continue."
@@ -147,14 +389,60 @@ export default function BookMeetingScreen() {
 
     setBooking(true);
     try {
-      const scheduledAt = new Date(
-        `${selectedDate}T${selectedTime}:00`
-      ).toISOString();
-      await mockMeetingsService.createMeeting(
-        selectedLocation.id,
-        scheduledAt,
-        "Meeting booked via mobile app"
-      );
+      // Get user's medical_rep_id if they're a medical rep
+      let medicalRepId: string | null = null;
+      if (user.user_type === "medical_rep") {
+        const { data: medicalRep, error: repError } = await supabase
+          .from("medical_reps")
+          .select("id")
+          .eq("profile_id", user.id)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (repError) {
+          console.error("Error fetching medical rep:", repError);
+          throw new Error("Unable to verify medical rep status");
+        }
+
+        if (medicalRep && (medicalRep as { id: string }).id) {
+          medicalRepId = (medicalRep as { id: string }).id;
+        } else {
+          throw new Error("Medical rep not found");
+        }
+      } else {
+        throw new Error("Only medical reps can book meetings");
+      }
+
+      // Calculate start and end times
+      const startAt = new Date(`${selectedDate}T${selectedTime}:00`);
+      const endAt = new Date(startAt.getTime() + 60 * 60 * 1000); // Add 60 minutes
+
+      // Create meeting in Supabase
+      const { data: newMeeting, error: meetingError } = await supabase
+        .from("meetings")
+        .insert({
+          location_id: selectedLocation.id,
+          medical_rep_id: medicalRepId,
+          requested_by_profile_id: user.id,
+          provider_id: null,
+          food_preferences_id: null,
+          meeting_type: "in_person",
+          title: null,
+          description: "Meeting booked via mobile app",
+          start_at: startAt.toISOString(),
+          end_at: endAt.toISOString(),
+          status: "pending",
+          auto_approved: false,
+          approved_by_profile_id: null,
+          approved_at: null,
+        } as any)
+        .select()
+        .single();
+
+      if (meetingError) {
+        console.error("Error creating meeting:", meetingError);
+        throw new Error("Unable to create meeting");
+      }
 
       Alert.alert(
         "Meeting Scheduled",
@@ -178,7 +466,11 @@ export default function BookMeetingScreen() {
       );
     } catch (error) {
       console.error("Error booking meeting:", error);
-      Alert.alert("Error", "Unable to schedule the meeting. Please try again.");
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Unable to schedule the meeting. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setBooking(false);
     }
@@ -252,7 +544,7 @@ export default function BookMeetingScreen() {
                   <Text className="text-base font-semibold text-gray-900">
                     {location.name}
                   </Text>
-                  <Text className="text-sm text-gray-500 mt-1">
+                  <Text className="text-sm text-gray-500">
                     {location.address}
                   </Text>
                 </TouchableOpacity>
@@ -295,7 +587,7 @@ export default function BookMeetingScreen() {
                   }`}
                   style={{ minWidth: 88 }}
                 >
-                  <Text className="text-xs font-semibold uppercase text-gray-500">
+                  <Text className="text-xs font-bold uppercase text-gray-600">
                     {dateOption.dayLabel}
                   </Text>
                   {hasMeetings && (
@@ -309,10 +601,10 @@ export default function BookMeetingScreen() {
                       }}
                     />
                   )}
-                  <Text className="text-base font-semibold mt-2 text-gray-900">
+                  <Text className="text-xl font-semibold text-gray-900">
                     {dateOption.dayNumber}
                   </Text>
-                  <Text className="text-xs mt-1 text-gray-500">
+                  <Text className="text-xs text-gray-500">
                     {dateOption.monthLabel}
                   </Text>
                   {!isSelected && (
@@ -411,7 +703,7 @@ export default function BookMeetingScreen() {
                 >
                   <View>
                     <Text
-                      className={`text-base font-semibold ${
+                      className={`text-lg font-semibold ${
                         disabled ? "text-gray-400" : "text-gray-900"
                       }`}
                     >
@@ -475,7 +767,7 @@ export default function BookMeetingScreen() {
                 >
                   <View>
                     <Text
-                      className={`text-base font-semibold ${
+                      className={`text-lg font-semibold ${
                         disabled ? "text-gray-400" : "text-gray-900"
                       }`}
                     >
