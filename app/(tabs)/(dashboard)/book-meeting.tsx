@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Switch,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -45,6 +46,7 @@ export default function BookMeetingScreen() {
     string | null
   >(null);
   const [allDayMeetings, setAllDayMeetings] = useState<Meeting[]>([]);
+  const [showProviders, setShowProviders] = useState(false);
 
   useEffect(() => {
     if (
@@ -334,6 +336,45 @@ export default function BookMeetingScreen() {
         console.error("Error fetching location hours:", hoursError);
       }
 
+      // Fetch providers for this location
+      const { data: providersData, error: providersError } = await supabase
+        .from("locations")
+        .select("id, providers(id, first_name, last_name, credential, status)")
+        .eq("id", selectedLocation.id)
+        .single();
+
+      const providersList =
+        ((providersData as any)?.providers || []).filter(
+          (p: any) => p.status === "active"
+        ) || [];
+
+      if (providersError) {
+        console.error("Error fetching providers:", providersError);
+      }
+
+      // Fetch provider availability for this day
+      const providerIds = providersList.map((p: any) => p.id);
+      let availabilityData: any[] = [];
+      if (providerIds.length > 0) {
+        const { data: availabilityResult, error: availabilityError } =
+          await supabase
+            .from("provider_availability_effective")
+            .select("provider_id, start_time, end_time, is_in_office_effective")
+            .eq("location_id", selectedLocation.id)
+            .eq("day_of_week", dayOfWeek)
+            .eq("is_in_office_effective", true)
+            .in("provider_id", providerIds);
+
+        if (availabilityError) {
+          console.error(
+            "Error fetching provider availability:",
+            availabilityError
+          );
+        } else {
+          availabilityData = (availabilityResult || []) as any[];
+        }
+      }
+
       // Fetch preferred time slots for this location and day of week
       // Skip if Sunday (dayOfWeek === 0) since offices are closed
       let preferredSlotsData = null;
@@ -462,7 +503,7 @@ export default function BookMeetingScreen() {
               time: timeString,
               available: true, // Start as available, overlap check will update
               preferred: true,
-              clinicianCount: 1,
+              availableProviders: [],
             });
           }
         });
@@ -506,7 +547,7 @@ export default function BookMeetingScreen() {
             time: timeString,
             available: true, // Start as available, overlap check will update
             preferred: false,
-            clinicianCount: 1,
+            availableProviders: [],
           });
         }
       }
@@ -597,6 +638,49 @@ export default function BookMeetingScreen() {
         }
       });
       console.log("=== End Overlap Check Debug ===");
+
+      // Calculate available providers for each slot
+      allSlots.forEach((slot) => {
+        const slotTimeMinutes = parseTimeToMinutes(slot.time);
+        const slotEndMinutes = slotTimeMinutes + 60; // All slots are 60 minutes
+        const slotStartTimeStr = formatMinutesToTime(slotTimeMinutes);
+        const slotEndTimeStr = formatMinutesToTime(slotEndMinutes);
+
+        const availableProviderNames: string[] = [];
+
+        // Check each provider's availability
+        providersList.forEach((provider: any) => {
+          // Find availability data for this provider
+          const providerAvailability = availabilityData.find(
+            (avail: any) => avail.provider_id === provider.id
+          );
+
+          if (providerAvailability) {
+            // Check if slot time falls within provider's time range
+            const providerStartMinutes = parseTimeToMinutes(
+              providerAvailability.start_time
+            );
+            const providerEndMinutes = parseTimeToMinutes(
+              providerAvailability.end_time
+            );
+
+            // Slot overlaps if: slot.start < provider.end AND slot.end > provider.start
+            const timeOverlaps =
+              slotTimeMinutes < providerEndMinutes &&
+              slotEndMinutes > providerStartMinutes;
+
+            if (timeOverlaps) {
+              // Format provider name: "First Last, Title"
+              const providerName = `${provider.first_name} ${
+                provider.last_name
+              }${provider.credential ? `, ${provider.credential}` : ""}`;
+              availableProviderNames.push(providerName);
+            }
+          }
+        });
+
+        slot.availableProviders = availableProviderNames;
+      });
 
       // Update allDayMeetings state for consistency (even though we used freshMeetings above)
       setAllDayMeetings(freshMeetings);
@@ -955,9 +1039,23 @@ export default function BookMeetingScreen() {
 
         {/* Preferred slots */}
         <View className="mb-6">
-          <Text className="text-base font-semibold text-gray-800 mb-3">
-            Preferred Times
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-base font-semibold text-gray-800">
+              Preferred Times
+            </Text>
+            <View className="flex-row items-center">
+              <Text className="text-xs text-gray-600 mr-2">
+                Available providers
+              </Text>
+              <Switch
+                value={showProviders}
+                onValueChange={setShowProviders}
+                trackColor={{ false: "#d1d5db", true: "#0086c9" }}
+                thumbColor="#ffffff"
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+          </View>
           {!selectedLocation ? (
             <Text className="text-gray-500 text-sm">
               Select a location to view preferred times.
@@ -968,7 +1066,6 @@ export default function BookMeetingScreen() {
             preferredSlots.map((slot) => {
               const isSelected = selectedTime === slot.time;
               const disabled = !slot.available || slot.isBooked;
-              const clinicianCount = slot.clinicianCount ?? 1;
               return (
                 <TouchableOpacity
                   key={slot.time}
@@ -986,43 +1083,62 @@ export default function BookMeetingScreen() {
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between">
                       <View className="flex-column">
-                        <Text
-                          className={`text-lg font-semibold ${
-                            disabled ? "text-gray-400" : "text-gray-900"
-                          }`}
-                        >
-                          {formatTimeLabel(slot.time)}
-                        </Text>
-                        <Text
-                          className={`text-xs ${
-                            disabled ? "text-gray-400" : "text-gray-500"
-                          }`}
-                        >
-                          {clinicianCount} clinician
-                          {clinicianCount === 1 ? "" : "s"} available
-                        </Text>
-                      </View>
-                      {slot.isBooked && (
-                        <View
-                          className={`px-2 py-1 mr-2 rounded-full ${
-                            slot.bookedByCurrentUser
-                              ? "bg-blue-100"
-                              : "bg-gray-200"
-                          }`}
-                        >
+                        <View className="flex-row items-center">
                           <Text
-                            className={`text-xs font-semibold ${
-                              slot.bookedByCurrentUser
-                                ? "text-blue-700"
-                                : "text-gray-600"
+                            className={`text-lg font-semibold ${
+                              disabled ? "text-gray-400" : "text-gray-900"
                             }`}
                           >
-                            {slot.bookedByCurrentUser
-                              ? "Booked by you"
-                              : "Booked"}
+                            {formatTimeLabel(slot.time)}
                           </Text>
+                          {slot.isBooked && (
+                            <View
+                              className={`px-2 py-1 ml-2 rounded-full ${
+                                slot.bookedByCurrentUser
+                                  ? "bg-blue-100"
+                                  : "bg-gray-200"
+                              }`}
+                            >
+                              <Text
+                                className={`text-xs font-semibold ${
+                                  slot.bookedByCurrentUser
+                                    ? "text-blue-700"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {slot.bookedByCurrentUser
+                                  ? "Booked by you"
+                                  : "Booked"}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                      )}
+                        {showProviders && (
+                          <View className="mt-2">
+                            {slot.availableProviders &&
+                            slot.availableProviders.length > 0 ? (
+                              slot.availableProviders.map((provider, idx) => (
+                                <Text
+                                  key={idx}
+                                  className={`text-xs ${
+                                    disabled ? "text-gray-400" : "text-gray-500"
+                                  }`}
+                                >
+                                  {provider}
+                                </Text>
+                              ))
+                            ) : (
+                              <Text
+                                className={`text-xs ${
+                                  disabled ? "text-gray-400" : "text-gray-500"
+                                }`}
+                              >
+                                No providers available
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
                   <ClockIcon
@@ -1041,9 +1157,23 @@ export default function BookMeetingScreen() {
 
         {/* Other slots */}
         <View className="mb-8">
-          <Text className="text-base font-semibold text-gray-800 mb-3">
-            All Other Times
-          </Text>
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-base font-semibold text-gray-800">
+              All Other Times
+            </Text>
+            <View className="flex-row items-center">
+              <Text className="text-xs text-gray-600 mr-2">
+                Available providers
+              </Text>
+              <Switch
+                value={showProviders}
+                onValueChange={setShowProviders}
+                trackColor={{ false: "#d1d5db", true: "#0086c9" }}
+                thumbColor="#ffffff"
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+              />
+            </View>
+          </View>
           {!selectedLocation ? (
             <Text className="text-gray-500 text-sm">
               Choose a location to see all available times.
@@ -1054,7 +1184,6 @@ export default function BookMeetingScreen() {
             otherSlots.map((slot) => {
               const isSelected = selectedTime === slot.time;
               const disabled = !slot.available || slot.isBooked;
-              const clinicianCount = slot.clinicianCount ?? 1;
               return (
                 <TouchableOpacity
                   key={slot.time}
@@ -1072,43 +1201,62 @@ export default function BookMeetingScreen() {
                   <View className="flex-1">
                     <View className="flex-row items-center justify-between">
                       <View className="flex-column">
-                        <Text
-                          className={`text-lg font-semibold ${
-                            disabled ? "text-gray-400" : "text-gray-900"
-                          }`}
-                        >
-                          {formatTimeLabel(slot.time)}
-                        </Text>
-                        <Text
-                          className={`text-xs ${
-                            disabled ? "text-gray-400" : "text-gray-500"
-                          }`}
-                        >
-                          {clinicianCount} clinician
-                          {clinicianCount === 1 ? "" : "s"} available
-                        </Text>
-                      </View>
-                      {slot.isBooked && (
-                        <View
-                          className={`px-2 py-1 mr-2 rounded-full ${
-                            slot.bookedByCurrentUser
-                              ? "bg-blue-100"
-                              : "bg-gray-200"
-                          }`}
-                        >
+                        <View className="flex-row items-center">
                           <Text
-                            className={`text-xs font-semibold ${
-                              slot.bookedByCurrentUser
-                                ? "text-blue-700"
-                                : "text-gray-600"
+                            className={`text-lg font-semibold ${
+                              disabled ? "text-gray-400" : "text-gray-900"
                             }`}
                           >
-                            {slot.bookedByCurrentUser
-                              ? "Booked by you"
-                              : "Booked"}
+                            {formatTimeLabel(slot.time)}
                           </Text>
+                          {slot.isBooked && (
+                            <View
+                              className={`px-2 py-1 ml-2 rounded-full ${
+                                slot.bookedByCurrentUser
+                                  ? "bg-blue-100"
+                                  : "bg-gray-200"
+                              }`}
+                            >
+                              <Text
+                                className={`text-xs font-semibold ${
+                                  slot.bookedByCurrentUser
+                                    ? "text-blue-700"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {slot.bookedByCurrentUser
+                                  ? "Booked by you"
+                                  : "Booked"}
+                              </Text>
+                            </View>
+                          )}
                         </View>
-                      )}
+                        {showProviders && (
+                          <View className="mt-2">
+                            {slot.availableProviders &&
+                            slot.availableProviders.length > 0 ? (
+                              slot.availableProviders.map((provider, idx) => (
+                                <Text
+                                  key={idx}
+                                  className={`text-xs ${
+                                    disabled ? "text-gray-400" : "text-gray-500"
+                                  }`}
+                                >
+                                  {provider}
+                                </Text>
+                              ))
+                            ) : (
+                              <Text
+                                className={`text-xs ${
+                                  disabled ? "text-gray-400" : "text-gray-500"
+                                }`}
+                              >
+                                No providers available
+                              </Text>
+                            )}
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </View>
                   <ClockIcon

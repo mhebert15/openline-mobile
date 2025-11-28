@@ -421,7 +421,7 @@ function TabsContent() {
             </View>
             <View className="px-4 pt-4">
               <TextInput
-                className="border border-gray-300 rounded-lg px-4 py-3 text-base"
+                className="border border-gray-200 rounded-md px-4 py-4 flex-row items-center"
                 placeholder="To: start typing a name or email"
                 value={recipientQuery}
                 onChangeText={(value) => {
@@ -470,7 +470,7 @@ function TabsContent() {
             <View className="px-4 pb-6">
               <View className="bg-white border border-gray-200 rounded-full px-4 py-2 flex-row items-center">
                 <TextInput
-                  className="flex-1 text-base text-gray-900 mr-2"
+                  className="flex-1 text-base text-gray-900 flex-row items-center justify-center mr-2"
                   placeholder="Type a message..."
                   placeholderTextColor="#9ca3af"
                   value={composeBody}

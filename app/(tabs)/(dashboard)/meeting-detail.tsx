@@ -156,11 +156,11 @@ export default function MeetingDetailScreen() {
         };
 
         const dayMap: Record<number, keyof PreferredMeetingTimes> = {
-          0: "monday",
-          1: "tuesday",
-          2: "wednesday",
-          3: "thursday",
-          4: "friday",
+          1: "monday", // location_preferred_time_slots uses: 1=Monday, 2=Tuesday, etc.
+          2: "tuesday",
+          3: "wednesday",
+          4: "thursday",
+          5: "friday",
         };
 
         const sortedSlots = (timeSlotsList as any[]).sort((a, b) => {
@@ -676,17 +676,30 @@ export default function MeetingDetailScreen() {
                       day.key as keyof PreferredMeetingTimes
                     ];
                   if (!times || times.length === 0) return null;
+
+                  const formatTimeRange = (timeRange: string): string => {
+                    const [startTime, endTime] = timeRange.split(" - ");
+                    if (!startTime || !endTime) return timeRange;
+
+                    const formatTime = (time: string): string => {
+                      const [hours, minutes] = time.split(":");
+                      const hour = parseInt(hours, 10);
+                      const ampm = hour >= 12 ? "PM" : "AM";
+                      const displayHour = hour % 12 || 12;
+                      return `${displayHour}:${minutes} ${ampm}`;
+                    };
+
+                    return `${formatTime(startTime)} - ${formatTime(endTime)}`;
+                  };
+
                   return (
                     <View key={day.key} className="py-2">
                       <Text className="text-gray-900 font-medium">
                         {day.label}
                       </Text>
                       {times.map((time, idx) => (
-                        <Text
-                          key={idx}
-                          className="text-gray-600 text-sm ml-2 mt-1"
-                        >
-                          • {time}
+                        <Text key={idx} className="text-gray-600 text-sm mt-1">
+                          {formatTimeRange(time)}
                         </Text>
                       ))}
                     </View>
@@ -721,15 +734,15 @@ export default function MeetingDetailScreen() {
                 )}
 
                 {foodPreferences.favorite_foods.length > 0 && (
-                  <View className="mb-3">
-                    <Text className="text-gray-900 font-medium mb-1">
+                  <View>
+                    <Text className="text-gray-900 font-medium mb-3">
                       Favorite Foods
                     </Text>
-                    <View className="flex-row flex-wrap">
+                    <View className="flex-row flex-wrap gap-2">
                       {foodPreferences.favorite_foods.map((food, idx) => (
                         <View
                           key={idx}
-                          className="bg-green-100 rounded-full px-3 py-1 mr-2 mb-2"
+                          className="bg-green-100 rounded-full px-3 py-1"
                         >
                           <Text className="text-green-800 text-sm">{food}</Text>
                         </View>
@@ -740,14 +753,14 @@ export default function MeetingDetailScreen() {
 
                 {foodPreferences.dislikes.length > 0 && (
                   <View>
-                    <Text className="text-gray-900 font-medium mb-1">
+                    <Text className="text-gray-900 font-medium mb-3">
                       Dislikes
                     </Text>
-                    <View className="flex-row flex-wrap">
+                    <View className="flex-row flex-wrap gap-2">
                       {foodPreferences.dislikes.map((dislike, idx) => (
                         <View
                           key={idx}
-                          className="bg-red-100 rounded-full px-3 py-1 mr-2 mb-2"
+                          className="bg-red-100 rounded-full px-3 py-1"
                         >
                           <Text className="text-red-800 text-sm">
                             {dislike}
@@ -763,9 +776,12 @@ export default function MeetingDetailScreen() {
             {/* Office Staff */}
             {officeStaff.length > 0 && (
               <View className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm">
-                <Text className="text-lg font-semibold text-gray-900 mb-3">
-                  Office Staff
-                </Text>
+                <View className="flex-row items-center mb-3">
+                  <UserIcon size={20} color="#0086c9" />
+                  <Text className="text-lg font-semibold text-gray-900 ml-2">
+                    Office Staff
+                  </Text>
+                </View>
                 {officeStaff.map((staff, index) => (
                   <View
                     key={staff.id}

@@ -246,7 +246,7 @@ export interface TimeSlot {
   time: string;
   available: boolean;
   preferred?: boolean;
-  clinicianCount?: number;
+  availableProviders?: string[]; // List of provider names formatted as "First Last, Title"
   bookedByCurrentUser?: boolean;
   isBooked?: boolean;
 }

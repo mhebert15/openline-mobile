@@ -122,7 +122,7 @@ function MessagesScreen() {
       >
         <View className="p-4">
           {messages.length === 0 ? (
-            <View className="bg-white rounded-xl p-8 items-center">
+            <View className="p-8 items-center">
               <MessageCircleIcon size={48} color="#9ca3af" />
               <Text className="text-gray-500 mt-4 text-center">
                 No messages yet

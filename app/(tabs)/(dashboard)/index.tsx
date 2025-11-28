@@ -128,9 +128,7 @@ function DashboardScreen() {
     >
       <View className="p-4">
         <View className="mb-6">
-          <Text className="text-3xl font-bold text-gray-900">
-            Welcome back,
-          </Text>
+          <Text className="text-3xl font-bold text-gray-900">Welcome,</Text>
           <Text className="text-3xl font-bold" style={{ color: "#0086c9" }}>
             {user?.full_name || "User"}
           </Text>
