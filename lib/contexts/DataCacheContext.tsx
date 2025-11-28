@@ -280,10 +280,12 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
               }
 
               // Fetch completed meetings count
+              // Count approved meetings that are in the past
               let completedCountQuery = supabase
                 .from("meetings")
                 .select("id", { count: "exact", head: true })
-                .eq("status", "completed");
+                .eq("status", "approved")
+                .lt("start_at", new Date().toISOString());
 
               if (medicalRepId) {
                 completedCountQuery = completedCountQuery.eq(

@@ -185,6 +185,23 @@ export interface FoodPreferences {
   dislikes: string[];
 }
 
+// Provider Availability Effective table structure from Supabase
+export interface ProviderAvailabilityEffective {
+  id: string;
+  provider_id: string;
+  location_id: string;
+  day_of_week: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday (matching location_hours format)
+  is_in_office: boolean;
+  location_is_closed: boolean;
+  is_in_office_effective: boolean;
+  start_time: string | null; // time without time zone
+  end_time: string | null; // time without time zone
+  location_open_time: string | null; // time without time zone
+  location_close_time: string | null; // time without time zone
+  created_at: string;
+  updated_at: string;
+}
+
 // Meeting table structure from Supabase (matches meetings table)
 export interface Meeting {
   id: string;
@@ -230,6 +247,8 @@ export interface TimeSlot {
   available: boolean;
   preferred?: boolean;
   clinicianCount?: number;
+  bookedByCurrentUser?: boolean;
+  isBooked?: boolean;
 }
 
 export interface AvailableSlot {

@@ -27,6 +27,30 @@ function DashboardScreen() {
     (cache.dashboard.upcomingMeetings.data as Meeting[]) || [];
   const completedCount = cache.dashboard.completedCount.data || 0;
 
+  // Helper function to get status badge styling
+  const getStatusBadgeStyle = (status: string) => {
+    switch (status) {
+      case "approved":
+        return {
+          bgColor: "#d1fae5",
+          textColor: "#065f46",
+          label: "Approved",
+        };
+      case "pending":
+        return {
+          bgColor: "#fef3c7",
+          textColor: "#92400e",
+          label: "Pending",
+        };
+      default:
+        return {
+          bgColor: "#e5e7eb",
+          textColor: "#374151",
+          label: status,
+        };
+    }
+  };
+
   // Filter today's meetings
   const todaysMeetings = useMemo(() => {
     const today = new Date();
@@ -103,7 +127,7 @@ function DashboardScreen() {
       }}
     >
       <View className="p-4">
-        <View className="mb-4">
+        <View className="mb-6">
           <Text className="text-3xl font-bold text-gray-900">
             Welcome back,
           </Text>
@@ -112,11 +136,10 @@ function DashboardScreen() {
           </Text>
         </View>
 
+        <Text className="text-xl font-bold text-gray-900 mb-3">Meetings</Text>
         <View className="flex-row mb-6 gap-4">
           <View className="flex-1 bg-white rounded-xl p-5 shadow-sm">
-            <Text className="text-gray-600 text-sm mb-2">
-              Completed Meetings
-            </Text>
+            <Text className="text-gray-600 text-sm mb-2">Completed</Text>
             <Text className="text-3xl font-bold text-gray-900">
               {completedCount}
             </Text>
@@ -130,7 +153,7 @@ function DashboardScreen() {
         </View>
 
         <TouchableOpacity
-          className="rounded-xl p-4 mb-6"
+          className="rounded-xl p-4 mb-8"
           style={{ backgroundColor: "#0086c9" }}
           onPress={() => router.push("/book-meeting")}
         >
@@ -142,7 +165,7 @@ function DashboardScreen() {
         {/* Today's Meetings */}
         {todaysMeetings.length > 0 && (
           <View className="mb-6">
-            <Text className="text-xl font-bold text-gray-900 mb-4">
+            <Text className="text-xl font-bold text-gray-900 mb-3">
               Today's Meetings
             </Text>
             {todaysMeetings.map((meeting) => (
@@ -162,9 +185,28 @@ function DashboardScreen() {
                     <CalendarIcon size={20} color="#0086c9" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-lg font-semibold text-gray-900">
-                      {meeting.location?.name || meeting.title || "Meeting"}
-                    </Text>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-lg font-semibold text-gray-900 flex-1">
+                        {meeting.location?.name || meeting.title || "Meeting"}
+                      </Text>
+                      <View
+                        className="px-3 py-1 rounded-full ml-2"
+                        style={{
+                          backgroundColor: getStatusBadgeStyle(meeting.status)
+                            .bgColor,
+                        }}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{
+                            color: getStatusBadgeStyle(meeting.status)
+                              .textColor,
+                          }}
+                        >
+                          {getStatusBadgeStyle(meeting.status).label}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 
@@ -216,7 +258,7 @@ function DashboardScreen() {
         )}
 
         <View>
-          <Text className="text-xl font-bold text-gray-900 mb-4">
+          <Text className="text-xl font-bold text-gray-900 mb-3">
             Upcoming Meetings
           </Text>
 
@@ -245,9 +287,28 @@ function DashboardScreen() {
                     <CalendarIcon size={20} color="#0086c9" />
                   </View>
                   <View className="flex-1">
-                    <Text className="text-lg font-semibold text-gray-900">
-                      {meeting.location?.name || meeting.title || "Meeting"}
-                    </Text>
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-lg font-semibold text-gray-900 flex-1">
+                        {meeting.location?.name || meeting.title || "Meeting"}
+                      </Text>
+                      <View
+                        className="px-3 py-1 rounded-full ml-2"
+                        style={{
+                          backgroundColor: getStatusBadgeStyle(meeting.status)
+                            .bgColor,
+                        }}
+                      >
+                        <Text
+                          className="text-xs font-semibold"
+                          style={{
+                            color: getStatusBadgeStyle(meeting.status)
+                              .textColor,
+                          }}
+                        >
+                          {getStatusBadgeStyle(meeting.status).label}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 

@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { addDays, format, parse } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CalendarIcon, ClockIcon, CheckIcon } from "lucide-react-native";
@@ -26,7 +27,7 @@ export default function BookMeetingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const { cache, prefetchTabData, isLoading } = useDataCache();
+  const { cache, prefetchTabData, isLoading, invalidateTab } = useDataCache();
 
   const meetings = (cache.calendar.meetings.data as Meeting[]) || [];
   const locations = (cache.calendar.locations.data as MedicalOffice[]) || [];
@@ -40,6 +41,10 @@ export default function BookMeetingScreen() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [booking, setBooking] = useState(false);
   const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
+  const [currentUserMedicalRepId, setCurrentUserMedicalRepId] = useState<
+    string | null
+  >(null);
+  const [allDayMeetings, setAllDayMeetings] = useState<Meeting[]>([]);
 
   useEffect(() => {
     if (
@@ -62,6 +67,42 @@ export default function BookMeetingScreen() {
       setSelectedLocationId(locations[0].id);
     }
   }, [locations, selectedLocationId]);
+
+  // Fetch current user's medical_rep_id
+  useEffect(() => {
+    const fetchMedicalRepId = async () => {
+      if (!user || user.user_type !== "medical_rep") {
+        setCurrentUserMedicalRepId(null);
+        return;
+      }
+
+      try {
+        const { data: medicalRep, error: repError } = await supabase
+          .from("medical_reps")
+          .select("id")
+          .eq("profile_id", user.id)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (repError) {
+          console.error("Error fetching medical rep:", repError);
+          setCurrentUserMedicalRepId(null);
+          return;
+        }
+
+        if (medicalRep && (medicalRep as { id: string }).id) {
+          setCurrentUserMedicalRepId((medicalRep as { id: string }).id);
+        } else {
+          setCurrentUserMedicalRepId(null);
+        }
+      } catch (error) {
+        console.error("Error fetching medical rep ID:", error);
+        setCurrentUserMedicalRepId(null);
+      }
+    };
+
+    fetchMedicalRepId();
+  }, [user]);
 
   // Fetch location hours when location changes
   useEffect(() => {
@@ -108,6 +149,7 @@ export default function BookMeetingScreen() {
 
   const dateOptions = useMemo(() => {
     const today = new Date();
+    // Limit to 2 weeks (14 days) from today
     const allDates = Array.from({ length: 30 }).map((_, index) => {
       const date = addDays(today, index);
       const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -134,6 +176,63 @@ export default function BookMeetingScreen() {
 
   const selectedDate = dateOptions[selectedDateIndex]?.key ?? "";
 
+  // Function to fetch all meetings for selected date
+  const fetchAllDayMeetings = useCallback(
+    async (forceRefresh = false) => {
+      if (!selectedDate) {
+        setAllDayMeetings([]);
+        return;
+      }
+
+      try {
+        // Clear existing data if forcing refresh
+        if (forceRefresh) {
+          setAllDayMeetings([]);
+        }
+
+        // Calculate start and end of day in ISO format
+        const startOfDay = new Date(`${selectedDate}T00:00:00`);
+        const endOfDay = new Date(`${selectedDate}T23:59:59`);
+
+        // Fetch fresh data from Supabase (always query directly, don't rely on cache)
+        const { data: meetingsData, error: meetingsError } = await supabase
+          .from("meetings")
+          .select("id, location_id, medical_rep_id, start_at, end_at, status")
+          .gte("start_at", startOfDay.toISOString())
+          .lt("start_at", endOfDay.toISOString())
+          .in("status", ["pending", "approved", "completed"]);
+
+        const meetings = (meetingsData as Meeting[]) || [];
+        console.log("=== Fetching All Day Meetings ===");
+        console.log("Date:", selectedDate);
+        console.log("Fetched meetings:", meetings);
+        console.log(
+          "Meetings with cancelled status (should be 0):",
+          meetings.filter((m) => m.status === "cancelled")
+        );
+        console.log("Total active meetings:", meetings.length);
+        console.log("=== End Fetch ===");
+
+        if (meetingsError) {
+          console.error("Error fetching all day meetings:", meetingsError);
+          setAllDayMeetings([]);
+          return;
+        }
+
+        setAllDayMeetings(meetings);
+      } catch (error) {
+        console.error("Error fetching all day meetings:", error);
+        setAllDayMeetings([]);
+      }
+    },
+    [selectedDate]
+  );
+
+  // Fetch all meetings for selected date across all locations
+  useEffect(() => {
+    fetchAllDayMeetings(false);
+  }, [fetchAllDayMeetings]);
+
   const selectedLocation = useMemo(() => {
     if (!selectedLocationId) return null;
     return (
@@ -156,7 +255,10 @@ export default function BookMeetingScreen() {
       const matchesLocation = selectedLocationId
         ? meeting.location_id === selectedLocationId
         : true;
-      return matchesDate && matchesLocation;
+      // Exclude cancelled and rejected meetings
+      const isActive =
+        meeting.status !== "cancelled" && meeting.status !== "rejected";
+      return matchesDate && matchesLocation && isActive;
     });
   }, [meetings, selectedDate, selectedLocationId]);
 
@@ -171,6 +273,41 @@ export default function BookMeetingScreen() {
 
     try {
       setSlotsLoading(true);
+
+      // Fetch fresh meetings for this date directly (don't rely on state to avoid race conditions)
+      const startOfDay = new Date(`${selectedDate}T00:00:00`);
+      const endOfDay = new Date(`${selectedDate}T23:59:59`);
+
+      // Fetch meetings - explicitly exclude cancelled and rejected
+      // Use .in() to only get active statuses (more reliable than .neq())
+      const { data: meetingsData, error: meetingsError } = await supabase
+        .from("meetings")
+        .select("id, location_id, medical_rep_id, start_at, end_at, status")
+        .gte("start_at", startOfDay.toISOString())
+        .lt("start_at", endOfDay.toISOString())
+        .in("status", ["pending", "approved", "completed"]);
+
+      const freshMeetings = (meetingsData as Meeting[]) || [];
+      console.log("=== Fresh Meetings Fetch in loadAvailableSlots ===");
+      console.log("Date:", selectedDate);
+      console.log("Query result - Total meetings found:", freshMeetings.length);
+      if (freshMeetings.length > 0) {
+        console.log("⚠️ WARNING: Found meetings that should be excluded:");
+        freshMeetings.forEach((m, idx) => {
+          console.log(
+            `  Meeting ${idx + 1}: ID=${m.id}, Status=${m.status}, Start=${
+              m.start_at
+            }, End=${m.end_at}, Location=${m.location_id}`
+          );
+          if (m.status === "cancelled" || m.status === "rejected") {
+            console.error(
+              `  ❌ ERROR: Meeting ${m.id} has status "${m.status}" but should be excluded!`
+            );
+          }
+        });
+      } else {
+        console.log("✅ No active meetings found for this date");
+      }
 
       // Get day of week for the selected date
       // Parse the date string (format: "yyyy-MM-dd") and get day of week
@@ -268,6 +405,14 @@ export default function BookMeetingScreen() {
       const allSlots: TimeSlot[] = [];
       const preferredSlotTimes = new Set<string>();
 
+      // Get current time to filter out past slots (only for today)
+      const now = new Date();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selectedDateForComparison = new Date(year, month - 1, day);
+      selectedDateForComparison.setHours(0, 0, 0, 0);
+      const isToday = selectedDateForComparison.getTime() === today.getTime();
+
       // First, generate preferred slots (60-minute increments)
       if (preferredSlotsData && preferredSlotsData.length > 0) {
         console.log(
@@ -292,14 +437,30 @@ export default function BookMeetingScreen() {
           ) {
             const timeString = formatMinutesToTime(minutes);
 
-            // Check if this time slot conflicts with existing meetings
-            const isAvailable = !dayMeetingTimes.includes(timeString);
+            // Check if this slot is in the past (only for today)
+            if (isToday) {
+              const [hour, minute] = timeString.split(":").map(Number);
+              const slotStartTime = new Date(
+                year,
+                month - 1,
+                day,
+                hour,
+                minute
+              );
 
+              // Skip slots that have already passed
+              if (slotStartTime <= now) {
+                continue;
+              }
+            }
+
+            // Don't check availability here - let the overlap check handle it
+            // This avoids using stale cached data
             preferredSlotTimes.add(timeString);
 
             allSlots.push({
               time: timeString,
-              available: isAvailable,
+              available: true, // Start as available, overlap check will update
               preferred: true,
               clinicianCount: 1,
             });
@@ -307,7 +468,7 @@ export default function BookMeetingScreen() {
         });
       }
 
-      // Generate all other slots within office hours (30-minute increments)
+      // Generate all other slots within office hours (60-minute increments)
       if (!isClosed && locationHours?.open_time && locationHours?.close_time) {
         const openMinutes = parseTimeToMinutes(locationHours.open_time);
         const closeMinutes = parseTimeToMinutes(locationHours.close_time);
@@ -319,8 +480,8 @@ export default function BookMeetingScreen() {
           formatMinutesToTime(closeMinutes)
         );
 
-        // Generate 30-minute slots for the entire day
-        for (let minutes = openMinutes; minutes < closeMinutes; minutes += 30) {
+        // Generate 60-minute slots for the entire day
+        for (let minutes = openMinutes; minutes < closeMinutes; minutes += 60) {
           const timeString = formatMinutesToTime(minutes);
 
           // Skip if this is already a preferred slot
@@ -328,17 +489,117 @@ export default function BookMeetingScreen() {
             continue;
           }
 
-          // Check if this time slot conflicts with existing meetings
-          const isAvailable = !dayMeetingTimes.includes(timeString);
+          // Check if this slot is in the past (only for today)
+          if (isToday) {
+            const [hour, minute] = timeString.split(":").map(Number);
+            const slotStartTime = new Date(year, month - 1, day, hour, minute);
 
+            // Skip slots that have already passed
+            if (slotStartTime <= now) {
+              continue;
+            }
+          }
+
+          // Don't check availability here - let the overlap check handle it
+          // This avoids using stale cached data
           allSlots.push({
             time: timeString,
-            available: isAvailable,
+            available: true, // Start as available, overlap check will update
             preferred: false,
             clinicianCount: 1,
           });
         }
       }
+
+      // Check each slot for overlapping meetings using fresh data (not state)
+      console.log("=== Overlap Check Debug ===");
+      console.log("Total slots to check:", allSlots.length);
+      console.log("Fresh meetings for overlap check:", freshMeetings.length);
+      allSlots.forEach((slot) => {
+        // Reset booking flags for this slot
+        slot.isBooked = false;
+        slot.bookedByCurrentUser = false;
+        slot.available = true; // Start as available
+
+        // Calculate slot start and end times
+        // IMPORTANT: The slot time (e.g., "11:00") represents local time for the selected date
+        // Meetings from database are in UTC, so we need to compare correctly
+        const slotTimeMinutes = parseTimeToMinutes(slot.time);
+        const [year, month, day] = selectedDate.split("-").map(Number);
+        const [hour, minute] = slot.time.split(":").map(Number);
+
+        // Create slot start time in local timezone (this represents what the user sees)
+        // When compared to UTC dates, JavaScript handles the conversion
+        const slotStartTime = new Date(year, month - 1, day, hour, minute);
+        // All slots are 60 minutes (both preferred and other slots)
+        const slotDuration = 60;
+        const slotEndTime = new Date(
+          slotStartTime.getTime() + slotDuration * 60 * 1000
+        );
+
+        // Check if any meeting overlaps with this slot
+        // Only consider active meetings (exclude cancelled and rejected)
+        // Use freshMeetings instead of allDayMeetings to avoid race conditions
+        for (const meeting of freshMeetings) {
+          // Skip cancelled or rejected meetings (shouldn't be in query, but double-check)
+          if (meeting.status === "cancelled" || meeting.status === "rejected") {
+            console.log(
+              `Skipping cancelled/rejected meeting: ${meeting.id} (${meeting.status})`
+            );
+            continue;
+          }
+
+          const meetingStart = new Date(meeting.start_at);
+          const meetingEnd = meeting.end_at
+            ? new Date(meeting.end_at)
+            : new Date(meetingStart.getTime() + 60 * 60 * 1000); // Default to 60 minutes if no end_at
+
+          // Check for overlap: meeting overlaps if meeting.start_at < slot.end_at AND meeting.end_at > slot.start_at
+          // Use getTime() for explicit timestamp comparison to avoid any timezone issues
+          const slotStartMs = slotStartTime.getTime();
+          const slotEndMs = slotEndTime.getTime();
+          const meetingStartMs = meetingStart.getTime();
+          const meetingEndMs = meetingEnd.getTime();
+
+          const overlaps =
+            meetingStartMs < slotEndMs && meetingEndMs > slotStartMs;
+
+          if (overlaps) {
+            console.log(
+              `OVERLAP DETECTED: Slot ${
+                slot.time
+              } (${slotStartTime.toISOString()} - ${slotEndTime.toISOString()}, timestamps: ${slotStartMs} - ${slotEndMs}) overlaps with meeting ${
+                meeting.id
+              } (${meeting.start_at} - ${
+                meeting.end_at
+              }, timestamps: ${meetingStartMs} - ${meetingEndMs})`
+            );
+            console.log(
+              `  Slot local time: ${slotStartTime.toLocaleString()} - ${slotEndTime.toLocaleString()}`
+            );
+            console.log(
+              `  Meeting UTC: ${meetingStart.toISOString()} - ${meetingEnd.toISOString()}`
+            );
+            slot.isBooked = true;
+            slot.available = false;
+
+            // Check if this meeting was booked by the current user
+            if (
+              currentUserMedicalRepId &&
+              meeting.medical_rep_id === currentUserMedicalRepId
+            ) {
+              slot.bookedByCurrentUser = true;
+            } else {
+              slot.bookedByCurrentUser = false;
+            }
+            break; // Found an overlap, no need to check other meetings
+          }
+        }
+      });
+      console.log("=== End Overlap Check Debug ===");
+
+      // Update allDayMeetings state for consistency (even though we used freshMeetings above)
+      setAllDayMeetings(freshMeetings);
 
       // Sort slots by time
       allSlots.sort((a, b) => a.time.localeCompare(b.time));
@@ -362,13 +623,26 @@ export default function BookMeetingScreen() {
     } finally {
       setSlotsLoading(false);
     }
-  }, [selectedLocation, selectedDate, dayMeetingTimes]);
+  }, [selectedLocation, selectedDate, currentUserMedicalRepId]);
 
   useEffect(() => {
     if (selectedLocation && selectedDate) {
       loadAvailableSlots();
     }
   }, [selectedLocation, selectedDate, loadAvailableSlots]);
+
+  // Refresh meetings when screen comes into focus (force refresh)
+  // This only runs when navigating TO this screen, not when changing date/location within the screen
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Screen focused - refreshing time slots");
+      // Just reload the slots for the current date
+      // loadAvailableSlots fetches fresh data from DB internally
+      if (selectedLocation && selectedDate) {
+        loadAvailableSlots();
+      }
+    }, [loadAvailableSlots, selectedLocation, selectedDate])
+  );
 
   const formatTimeLabel = (time: string) => {
     const parsed = parse(time, "HH:mm", new Date());
@@ -417,6 +691,17 @@ export default function BookMeetingScreen() {
       const startAt = new Date(`${selectedDate}T${selectedTime}:00`);
       const endAt = new Date(startAt.getTime() + 60 * 60 * 1000); // Add 60 minutes
 
+      // Check if the selected time is in a preferred slot
+      const selectedSlot = availableSlots.find(
+        (slot) => slot.time === selectedTime
+      );
+      const isPreferredSlot = selectedSlot?.preferred ?? false;
+
+      // If it's a preferred slot, auto-approve the meeting
+      const meetingStatus = isPreferredSlot ? "approved" : "pending";
+      const autoApproved = isPreferredSlot;
+      const approvedAt = isPreferredSlot ? new Date().toISOString() : null;
+
       // Create meeting in Supabase
       const { data: newMeeting, error: meetingError } = await supabase
         .from("meetings")
@@ -431,10 +716,10 @@ export default function BookMeetingScreen() {
           description: "Meeting booked via mobile app",
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
-          status: "pending",
-          auto_approved: false,
-          approved_by_profile_id: null,
-          approved_at: null,
+          status: meetingStatus,
+          auto_approved: autoApproved,
+          approved_by_profile_id: autoApproved ? user.id : null,
+          approved_at: approvedAt,
         } as any)
         .select()
         .single();
@@ -681,11 +966,8 @@ export default function BookMeetingScreen() {
             <ActivityIndicator color="#0086c9" />
           ) : preferredSlots.length > 0 ? (
             preferredSlots.map((slot) => {
-              if (dayMeetingTimes.includes(slot.time)) {
-                return null;
-              }
               const isSelected = selectedTime === slot.time;
-              const disabled = !slot.available;
+              const disabled = !slot.available || slot.isBooked;
               const clinicianCount = slot.clinicianCount ?? 1;
               return (
                 <TouchableOpacity
@@ -701,22 +983,47 @@ export default function BookMeetingScreen() {
                       : "bg-white border-gray-200"
                   }`}
                 >
-                  <View>
-                    <Text
-                      className={`text-lg font-semibold ${
-                        disabled ? "text-gray-400" : "text-gray-900"
-                      }`}
-                    >
-                      {formatTimeLabel(slot.time)}
-                    </Text>
-                    <Text
-                      className={`text-xs mt-1 ${
-                        disabled ? "text-gray-400" : "text-gray-500"
-                      }`}
-                    >
-                      {clinicianCount} clinician
-                      {clinicianCount === 1 ? "" : "s"} available
-                    </Text>
+                  <View className="flex-1">
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-column">
+                        <Text
+                          className={`text-lg font-semibold ${
+                            disabled ? "text-gray-400" : "text-gray-900"
+                          }`}
+                        >
+                          {formatTimeLabel(slot.time)}
+                        </Text>
+                        <Text
+                          className={`text-xs ${
+                            disabled ? "text-gray-400" : "text-gray-500"
+                          }`}
+                        >
+                          {clinicianCount} clinician
+                          {clinicianCount === 1 ? "" : "s"} available
+                        </Text>
+                      </View>
+                      {slot.isBooked && (
+                        <View
+                          className={`px-2 py-1 mr-2 rounded-full ${
+                            slot.bookedByCurrentUser
+                              ? "bg-blue-100"
+                              : "bg-gray-200"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-semibold ${
+                              slot.bookedByCurrentUser
+                                ? "text-blue-700"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {slot.bookedByCurrentUser
+                              ? "Booked by you"
+                              : "Booked"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <ClockIcon
                     size={18}
@@ -745,11 +1052,8 @@ export default function BookMeetingScreen() {
             <ActivityIndicator color="#0086c9" />
           ) : otherSlots.length > 0 ? (
             otherSlots.map((slot) => {
-              if (dayMeetingTimes.includes(slot.time)) {
-                return null;
-              }
               const isSelected = selectedTime === slot.time;
-              const disabled = !slot.available;
+              const disabled = !slot.available || slot.isBooked;
               const clinicianCount = slot.clinicianCount ?? 1;
               return (
                 <TouchableOpacity
@@ -765,22 +1069,47 @@ export default function BookMeetingScreen() {
                       : "bg-white border-gray-200"
                   }`}
                 >
-                  <View>
-                    <Text
-                      className={`text-lg font-semibold ${
-                        disabled ? "text-gray-400" : "text-gray-900"
-                      }`}
-                    >
-                      {formatTimeLabel(slot.time)}
-                    </Text>
-                    <Text
-                      className={`text-xs mt-1 ${
-                        disabled ? "text-gray-400" : "text-gray-500"
-                      }`}
-                    >
-                      {clinicianCount} clinician
-                      {clinicianCount === 1 ? "" : "s"} available
-                    </Text>
+                  <View className="flex-1">
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-column">
+                        <Text
+                          className={`text-lg font-semibold ${
+                            disabled ? "text-gray-400" : "text-gray-900"
+                          }`}
+                        >
+                          {formatTimeLabel(slot.time)}
+                        </Text>
+                        <Text
+                          className={`text-xs ${
+                            disabled ? "text-gray-400" : "text-gray-500"
+                          }`}
+                        >
+                          {clinicianCount} clinician
+                          {clinicianCount === 1 ? "" : "s"} available
+                        </Text>
+                      </View>
+                      {slot.isBooked && (
+                        <View
+                          className={`px-2 py-1 mr-2 rounded-full ${
+                            slot.bookedByCurrentUser
+                              ? "bg-blue-100"
+                              : "bg-gray-200"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-semibold ${
+                              slot.bookedByCurrentUser
+                                ? "text-blue-700"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {slot.bookedByCurrentUser
+                              ? "Booked by you"
+                              : "Booked"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <ClockIcon
                     size={18}
@@ -799,7 +1128,7 @@ export default function BookMeetingScreen() {
         {meetings.length > 0 && (
           <View className="bg-white rounded-2xl p-4 shadow-sm">
             <Text className="text-base font-semibold text-gray-900 mb-3">
-              Upcoming Meetings
+              Future Meetings
             </Text>
             {meetings.slice(0, 3).map((meeting) => {
               const location = locations.find(

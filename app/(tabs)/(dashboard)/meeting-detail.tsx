@@ -45,6 +45,10 @@ export default function MeetingDetailScreen() {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loadedLocationId, setLoadedLocationId] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
+  // Map of provider_id to availability status (true = available, false = unavailable)
+  const [practitionerAvailability, setPractitionerAvailability] = useState<
+    Record<string, boolean>
+  >({});
 
   const meetingsFromCache = useMemo(() => {
     const dashboardMeetings =
@@ -63,7 +67,7 @@ export default function MeetingDetailScreen() {
   }, [id, meetingsFromCache]);
 
   const loadLocationData = React.useCallback(
-    async (locationId: string) => {
+    async (locationId: string, meetingDate?: string) => {
       if (!user) return;
 
       try {
@@ -89,6 +93,46 @@ export default function MeetingDetailScreen() {
           })
         );
         setPractitioners(practitionersList);
+
+        // Fetch practitioner availability if meeting date is provided
+        if (meetingDate && practitionersList.length > 0) {
+          // Determine the meeting's day of week
+          // JavaScript getDay(): 0=Sunday, 1=Monday, 2=Tuesday, etc.
+          // provider_availability_effective uses: 0=Sunday, 1=Monday, etc. (matching location_hours)
+          const meetingDateObj = new Date(meetingDate);
+          const dayOfWeek = meetingDateObj.getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+          // Fetch availability for all practitioners for this day
+          const providerIds = practitionersList.map((p) => p.id);
+          const { data: availabilityData, error: availabilityError } =
+            await supabase
+              .from("provider_availability_effective")
+              .select("provider_id, is_in_office_effective")
+              .eq("location_id", locationId)
+              .eq("day_of_week", dayOfWeek)
+              .in("provider_id", providerIds);
+
+          if (availabilityError) {
+            console.error(
+              "Error fetching practitioner availability:",
+              availabilityError
+            );
+          } else {
+            // Create a map of provider_id to availability status
+            const availabilityMap: Record<string, boolean> = {};
+            (availabilityData || []).forEach((item: any) => {
+              availabilityMap[item.provider_id] =
+                item.is_in_office_effective === true;
+            });
+            // Set availability for all practitioners (default to false if not found)
+            practitionersList.forEach((practitioner) => {
+              if (!(practitioner.id in availabilityMap)) {
+                availabilityMap[practitioner.id] = false; // Unavailable if no data
+              }
+            });
+            setPractitionerAvailability(availabilityMap);
+          }
+        }
 
         // Fetch preferred meeting times
         const { data: timeSlotsData } = await supabase
@@ -233,6 +277,7 @@ export default function MeetingDetailScreen() {
       setFoodPreferences(null);
       setLocationHours([]);
       setOfficeStaff([]);
+      setPractitionerAvailability({});
     }
   }, [id]);
 
@@ -258,36 +303,81 @@ export default function MeetingDetailScreen() {
       meeting.location_id !== loadedLocationId
     ) {
       setLoadedLocationId(meeting.location_id);
-      loadLocationData(meeting.location_id);
+      loadLocationData(meeting.location_id, meeting.start_at);
     }
   }, [id, meeting, user, prefetchTabData, loadLocationData, loadedLocationId]);
 
   const handleCancelMeeting = async () => {
-    if (!meeting?.id) return;
+    if (!meeting?.id) {
+      Alert.alert("Error", "Meeting ID not found.");
+      return;
+    }
 
     try {
       setCanceling(true);
-      const { error } = await supabase
+
+      // Update the meeting status to "cancelled" instead of deleting
+      // This respects RLS policies which allow the requester to update their meetings
+      const statusUpdate = { status: "cancelled" as const };
+      const query = supabase
         .from("meetings")
-        .delete()
-        .eq("id", meeting.id);
+        .update(statusUpdate as unknown as never)
+        .eq("id", meeting.id)
+        .select();
+
+      const { data, error } = (await query) as {
+        data: Meeting[] | null;
+        error: any;
+      };
 
       if (error) {
         console.error("Error canceling meeting:", error);
+        Alert.alert(
+          "Error",
+          `Failed to cancel meeting: ${
+            error.message || "Unknown error"
+          }. Please try again.`
+        );
+        setCanceling(false);
+        return;
+      }
+
+      // Verify the meeting was updated
+      if (!data || data.length === 0) {
+        console.error("Meeting cancellation returned no data");
+        Alert.alert(
+          "Error",
+          "Failed to cancel meeting. You may not have permission to cancel this meeting."
+        );
+        setCanceling(false);
+        return;
+      }
+
+      const updatedMeeting = data[0] as Meeting;
+      if (updatedMeeting.status !== "cancelled") {
+        console.error("Meeting status was not updated to cancelled");
         Alert.alert("Error", "Failed to cancel meeting. Please try again.");
         setCanceling(false);
         return;
       }
 
+      console.log("Meeting successfully cancelled:", meeting.id);
+
       // Invalidate cache to refresh data
       invalidateTab("dashboard");
       invalidateTab("calendar");
+
+      // Prefetch updated data
+      await prefetchTabData("dashboard");
+      await prefetchTabData("calendar");
 
       // Navigate back to dashboard
       router.back();
     } catch (error) {
       console.error("Error canceling meeting:", error);
-      Alert.alert("Error", "Failed to cancel meeting. Please try again.");
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      Alert.alert("Error", `Failed to cancel meeting: ${errorMessage}`);
     } finally {
       setCanceling(false);
     }
@@ -376,7 +466,9 @@ export default function MeetingDetailScreen() {
               <Text className="text-lg font-semibold text-gray-900">
                 {location?.name || meeting.title || "Medical Office"}
               </Text>
-              <Text className="text-gray-500 text-sm">{meeting.status}</Text>
+              <Text className="text-gray-500 text-sm capitalize">
+                {meeting.status}
+              </Text>
             </View>
           </View>
 
@@ -468,26 +560,49 @@ export default function MeetingDetailScreen() {
                     Medical Practitioners
                   </Text>
                 </View>
-                {practitioners.map((practitioner, index) => (
-                  <View
-                    key={practitioner.id}
-                    className={`py-3 ${
-                      index < practitioners.length - 1
-                        ? "border-b border-gray-100"
-                        : ""
-                    }`}
-                  >
-                    <Text className="text-gray-900 font-medium">
-                      {practitioner.first_name} {practitioner.last_name}
-                      {practitioner.title ? `, ${practitioner.title}` : ""}
-                    </Text>
-                    {practitioner.specialty && (
-                      <Text className="text-gray-600 text-sm mt-1">
-                        {practitioner.specialty}
-                      </Text>
-                    )}
-                  </View>
-                ))}
+                {practitioners.map((practitioner, index) => {
+                  const isAvailable =
+                    practitionerAvailability[practitioner.id] === true;
+                  return (
+                    <View
+                      key={practitioner.id}
+                      className={`py-3 ${
+                        index < practitioners.length - 1
+                          ? "border-b border-gray-100"
+                          : ""
+                      }`}
+                    >
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="text-gray-900 font-medium">
+                            {practitioner.first_name} {practitioner.last_name}
+                            {practitioner.title
+                              ? `, ${practitioner.title}`
+                              : ""}
+                          </Text>
+                          {practitioner.specialty && (
+                            <Text className="text-gray-600 text-sm mt-1">
+                              {practitioner.specialty}
+                            </Text>
+                          )}
+                        </View>
+                        <View
+                          className={`px-2.5 py-1 rounded-full ${
+                            isAvailable ? "bg-green-100" : "bg-gray-100"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-medium ${
+                              isAvailable ? "text-green-700" : "text-gray-600"
+                            }`}
+                          >
+                            {isAvailable ? "Available" : "Unavailable"}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
             )}
 
@@ -682,7 +797,7 @@ export default function MeetingDetailScreen() {
               <ActivityIndicator size="small" color="#ffffff" />
             ) : (
               <Text className="text-white font-semibold text-base">
-                Cancel Meeting
+                Cancel meeting
               </Text>
             )}
           </Pressable>
