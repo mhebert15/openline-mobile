@@ -7,15 +7,13 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "../supabase/client";
-import {
-  mockMeetingsService,
-  mockOfficesService,
-  mockMessagesService,
-} from "@/lib/mock/services";
+import { mockMeetingsService, mockOfficesService } from "@/lib/mock/services";
 import type {
   Meeting,
   MedicalOffice,
   Message,
+  Location,
+  Profile,
 } from "@/lib/types/database.types";
 
 // Cache entry structure
@@ -417,13 +415,71 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: true,
               }));
 
-              const messages = await mockMessagesService.getMessages(user.id);
-              // Sort by created_at descending (newest first)
-              const sorted = messages.sort(
-                (a, b) =>
-                  new Date(b.created_at).getTime() -
-                  new Date(a.created_at).getTime()
-              );
+              // Fetch messages where user is either sender or recipient
+              // Include location and profile data
+              const { data: messagesData, error: messagesError } =
+                await supabase
+                  .from("messages")
+                  .select(
+                    "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, read_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone), sender:profiles!sender_profile_id(id, full_name, email, phone, user_type, status), recipient:profiles!recipient_profile_id(id, full_name, email, phone, user_type, status)"
+                  )
+                  .or(
+                    `sender_profile_id.eq.${user.id},recipient_profile_id.eq.${user.id}`
+                  )
+                  .order("sent_at", { ascending: false });
+
+              if (messagesError) {
+                console.error("Error fetching messages:", messagesError);
+                updateCacheEntry(tabName, "messages", () => ({
+                  data: [],
+                  timestamp: Date.now(),
+                  loading: false,
+                }));
+                break;
+              }
+
+              // Map the data to match Message interface
+              // Supabase returns 'locations' (plural) but Message interface expects 'location' (singular)
+              const messagesArray = (messagesData as any[]) || [];
+
+              // Debug: log the structure to see what Supabase returns
+              if (messagesArray.length > 0) {
+                console.log(
+                  "Sample message from Supabase:",
+                  JSON.stringify(messagesArray[0], null, 2)
+                );
+                console.log(
+                  "Location data in first message:",
+                  messagesArray[0]?.locations
+                );
+              }
+
+              const messages: Message[] = messagesArray.map((msg: any) => ({
+                id: msg.id,
+                location_id: msg.location_id,
+                meeting_id: msg.meeting_id,
+                sender_profile_id: msg.sender_profile_id,
+                recipient_profile_id: msg.recipient_profile_id,
+                body: msg.body,
+                sent_at: msg.sent_at,
+                read_at: msg.read_at,
+                created_at: msg.created_at,
+                updated_at: msg.updated_at,
+                location: msg.locations
+                  ? (msg.locations as Location)
+                  : undefined,
+                sender: msg.sender ? (msg.sender as Profile) : undefined,
+                recipient: msg.recipient
+                  ? (msg.recipient as Profile)
+                  : undefined,
+              }));
+
+              // Sort by sent_at descending (newest first), fallback to created_at
+              const sorted = messages.sort((a, b) => {
+                const aTime = new Date(a.sent_at || a.created_at).getTime();
+                const bTime = new Date(b.sent_at || b.created_at).getTime();
+                return bTime - aTime;
+              });
 
               updateCacheEntry(tabName, "messages", () => ({
                 data: sorted,

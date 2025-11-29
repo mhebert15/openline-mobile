@@ -10,9 +10,8 @@ import {
   Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { mockMessages } from "@/lib/mock/data";
-import { mockMessagesService } from "@/lib/mock/services";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { supabase } from "@/lib/supabase/client";
 import type { Message } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { SendIcon } from "lucide-react-native";
@@ -33,33 +32,69 @@ export default function MessageDetailScreen() {
 
   useEffect(() => {
     loadConversation();
-  }, [locationId, user]);
+  }, [locationId, participantId, user]);
 
-  const loadConversation = () => {
-    if (!user || !locationId) return;
+  const loadConversation = async () => {
+    if (!user || !locationId) {
+      setLoading(false);
+      return;
+    }
 
-    // Filter messages for this specific conversation
-    const conversationMessages = mockMessages.filter(
-      (msg) =>
-        msg.location_id === locationId &&
-        (msg.sender_profile_id === user.id ||
-          msg.recipient_profile_id === user.id)
-    );
+    setLoading(true);
+    try {
+      // Fetch messages for this specific conversation thread
+      // Filter by location_id and where user is either sender or recipient
+      // Also filter by participantId to show only messages with that specific participant
+      // We need messages where:
+      //   - location_id matches
+      //   - AND (user is sender AND participant is recipient) OR (user is recipient AND participant is sender)
+      const { data: messagesData, error: messagesError } = await supabase
+        .from("messages")
+        .select(
+          "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, read_at, created_at, updated_at, sender:profiles!messages_sender_profile_id_fkey(id, full_name, email, phone, user_type, status), recipient:profiles!messages_recipient_profile_id_fkey(id, full_name, email, phone, user_type, status)"
+        )
+        .eq("location_id", locationId)
+        .or(
+          `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${participantId}),and(sender_profile_id.eq.${participantId},recipient_profile_id.eq.${user.id})`
+        )
+        .order("sent_at", { ascending: true });
 
-    // Sort by sent_at/created_at ascending (oldest first)
-    const sorted = conversationMessages.sort(
-      (a, b) =>
-        new Date(a.sent_at || a.created_at).getTime() -
-        new Date(b.sent_at || b.created_at).getTime()
-    );
+      if (messagesError) {
+        console.error("Error fetching messages:", messagesError);
+        setMessages([]);
+        setLoading(false);
+        return;
+      }
 
-    setMessages(sorted);
-    setLoading(false);
+      // Map the data to match Message interface
+      const messagesArray = (messagesData as any[]) || [];
+      const messages: Message[] = messagesArray.map((msg: any) => ({
+        id: msg.id,
+        location_id: msg.location_id,
+        meeting_id: msg.meeting_id,
+        sender_profile_id: msg.sender_profile_id,
+        recipient_profile_id: msg.recipient_profile_id,
+        body: msg.body,
+        sent_at: msg.sent_at,
+        read_at: msg.read_at,
+        created_at: msg.created_at,
+        updated_at: msg.updated_at,
+        sender: msg.sender ? (msg.sender as any) : undefined,
+        recipient: msg.recipient ? (msg.recipient as any) : undefined,
+      }));
 
-    // Scroll to bottom after messages load
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: false });
-    }, 100);
+      setMessages(messages);
+
+      // Scroll to bottom after messages load
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSend = async () => {
@@ -71,10 +106,22 @@ export default function MessageDetailScreen() {
 
     setSending(true);
     try {
-      await mockMessagesService.sendMessage(participantId, locationId, trimmed);
+      // Insert new message into Supabase
+      const { error: insertError } = await supabase.from("messages").insert({
+        location_id: locationId,
+        sender_profile_id: user.id,
+        recipient_profile_id: participantId,
+        body: trimmed,
+        sent_at: new Date().toISOString(),
+      } as any);
+
+      if (insertError) {
+        console.error("Error sending message:", insertError);
+        return;
+      }
 
       setMessageText("");
-      loadConversation();
+      await loadConversation();
 
       // Scroll to bottom after sending
       setTimeout(() => {
@@ -145,6 +192,12 @@ export default function MessageDetailScreen() {
                 ).getTime() >
                 300000; // 5 minutes
 
+            // Show sender name only if it's the first message or if the sender changed from the previous message
+            const previousMessage = index > 0 ? messages[index - 1] : null;
+            const previousSenderId = previousMessage?.sender_profile_id;
+            const showSenderName =
+              index === 0 || previousSenderId !== message.sender_profile_id;
+
             return (
               <View key={message.id} className="mb-3">
                 {showTimestamp && (
@@ -152,15 +205,17 @@ export default function MessageDetailScreen() {
                     {formatMessageTime(messageTime)}
                   </Text>
                 )}
-                <View
-                  className={`text-xs text-gray-500 mb-1 flex-row ${
-                    isSentByMe ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <Text className="text-xs text-gray-500 mb-1">
-                    {senderName}
-                  </Text>
-                </View>
+                {showSenderName && (
+                  <View
+                    className={`text-xs text-gray-500 mb-1 flex-row ${
+                      isSentByMe ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <Text className="text-xs text-gray-500 mb-1">
+                      {senderName}
+                    </Text>
+                  </View>
+                )}
 
                 <View
                   className={`flex-row ${
@@ -218,11 +273,13 @@ export default function MessageDetailScreen() {
             {sending ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <SendIcon
-                size={20}
-                color="white"
-                style={{ transform: [{ rotate: "45deg" }] }}
-              />
+              <View className="items-center justify-center w-full h-full">
+                <SendIcon
+                  size={20}
+                  color="white"
+                  style={{ transform: [{ rotate: "45deg" }], marginLeft: -3 }}
+                />
+              </View>
             )}
           </TouchableOpacity>
         </View>

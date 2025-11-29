@@ -10,12 +10,11 @@ import {
 import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
-import { mockMessagesService } from "@/lib/mock/services";
+import { supabase } from "@/lib/supabase/client";
 import type { Message } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
-import { mockAdminUsers, mockMessages, mockCurrentUser } from "@/lib/mock/data";
 import { useComposeSheet } from "@/lib/contexts/ComposeSheetContext";
 
 function MessagesScreen() {
@@ -50,6 +49,79 @@ function MessagesScreen() {
     return message.recipient || message.sender || null;
   };
 
+  // Group messages by conversation (location_id + other participant)
+  const groupedConversations = useMemo(() => {
+    if (!user || messages.length === 0) return [];
+
+    // Create a map to group messages by location_id + other participant ID
+    const conversationMap = new Map<
+      string,
+      {
+        locationId: string;
+        participantId: string;
+        participant: any;
+        location: any;
+        messages: Message[];
+        mostRecentMessage: Message;
+        unreadCount: number;
+      }
+    >();
+
+    messages.forEach((message) => {
+      const otherParticipant = getOtherParticipant(message);
+      if (!otherParticipant) return;
+
+      // Create a unique key for this conversation: location_id + participant_id
+      const conversationKey = `${message.location_id}_${otherParticipant.id}`;
+
+      if (!conversationMap.has(conversationKey)) {
+        conversationMap.set(conversationKey, {
+          locationId: message.location_id,
+          participantId: otherParticipant.id,
+          participant: otherParticipant,
+          location: message.location,
+          messages: [],
+          mostRecentMessage: message,
+          unreadCount: 0,
+        });
+      }
+
+      const conversation = conversationMap.get(conversationKey)!;
+      conversation.messages.push(message);
+
+      // Update most recent message if this one is newer
+      const currentTime = new Date(
+        message.sent_at || message.created_at
+      ).getTime();
+      const mostRecentTime = new Date(
+        conversation.mostRecentMessage.sent_at ||
+          conversation.mostRecentMessage.created_at
+      ).getTime();
+      if (currentTime > mostRecentTime) {
+        conversation.mostRecentMessage = message;
+      }
+
+      // Count unread messages (sent by other participant, not read by current user)
+      if (
+        message.sender_profile_id === otherParticipant.id &&
+        !message.read_at
+      ) {
+        conversation.unreadCount++;
+      }
+    });
+
+    // Convert map to array and sort by most recent message time (newest first)
+    return Array.from(conversationMap.values()).sort((a, b) => {
+      const aTime = new Date(
+        a.mostRecentMessage.sent_at || a.mostRecentMessage.created_at
+      ).getTime();
+      const bTime = new Date(
+        b.mostRecentMessage.sent_at || b.mostRecentMessage.created_at
+      ).getTime();
+      return bTime - aTime;
+    });
+  }, [messages, user]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     invalidateTab("messages");
@@ -62,47 +134,51 @@ function MessagesScreen() {
     }
   };
 
-  const handleMessagePress = async (message: Message) => {
-    const otherParticipant = getOtherParticipant(message);
-
-    if (!otherParticipant) {
-      return;
-    }
-
-    const isUnread = message.sender_profile_id !== user?.id && !message.read_at;
-    if (isUnread) {
-      mockMessagesService
-        .markAsRead(message.id)
-        .catch((error) => console.error("Error marking message read:", error));
-      prefetchTabData("messages").catch((error) =>
-        console.error("Error prefetching messages:", error)
+  const handleConversationPress = async (conversation: {
+    locationId: string;
+    participantId: string;
+    participant: any;
+    location: any;
+    messages: Message[];
+    mostRecentMessage: Message;
+    unreadCount: number;
+  }) => {
+    // Mark all unread messages in this conversation as read
+    if (conversation.unreadCount > 0) {
+      const unreadMessages = conversation.messages.filter(
+        (msg) =>
+          msg.sender_profile_id === conversation.participantId && !msg.read_at
       );
+
+      if (unreadMessages.length > 0) {
+        const messageIds = unreadMessages.map((msg) => msg.id);
+        const { error: updateError } = await supabase
+          .from("messages")
+          .update({ read_at: new Date().toISOString() } as unknown as never)
+          .in("id", messageIds);
+
+        if (updateError) {
+          console.error("Error marking messages read:", updateError);
+        } else {
+          // Refresh messages cache to reflect the read status
+          prefetchTabData("messages").catch((error) =>
+            console.error("Error prefetching messages:", error)
+          );
+        }
+      }
     }
 
     // Navigate to message detail with conversation params
     router.push({
       pathname: "/(tabs)/messages/message-detail",
       params: {
-        locationId: message.location_id,
-        locationName: message.location?.name || "Message",
-        participantId: otherParticipant.id,
-        participantName: otherParticipant.full_name,
+        locationId: conversation.locationId,
+        locationName: conversation.location?.name || "Message",
+        participantId: conversation.participantId,
+        participantName: conversation.participant.full_name,
       },
     });
   };
-
-  const existingConversationParticipantIds = useMemo(() => {
-    const ids = new Set<string>();
-    messages.forEach((message) => {
-      if (message.sender?.id && message.sender.id !== user?.id) {
-        ids.add(message.sender.id);
-      }
-      if (message.recipient?.id && message.recipient.id !== user?.id) {
-        ids.add(message.recipient.id);
-      }
-    });
-    return ids;
-  }, [messages, user?.id]);
 
   if (loading) {
     return (
@@ -121,7 +197,7 @@ function MessagesScreen() {
         }
       >
         <View className="p-4">
-          {messages.length === 0 ? (
+          {groupedConversations.length === 0 ? (
             <View className="p-8 items-center">
               <MessageCircleIcon size={48} color="#9ca3af" />
               <Text className="text-gray-500 mt-4 text-center">
@@ -134,25 +210,24 @@ function MessagesScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            messages.map((message) => {
-              const otherParticipant = getOtherParticipant(message);
-              const otherName = otherParticipant?.full_name || "You";
-              const locationName = message.location?.name || "Unknown Location";
-              const isUnread =
-                message.sender_profile_id !== user?.id && !message.read_at;
+            groupedConversations.map((conversation) => {
+              const locationName =
+                conversation.location?.name || "Unknown Location";
+              const participantName =
+                conversation.participant?.full_name || "Unknown";
+              const hasUnread = conversation.unreadCount > 0;
+              const mostRecentTime =
+                conversation.mostRecentMessage.sent_at ||
+                conversation.mostRecentMessage.created_at;
 
               return (
                 <TouchableOpacity
-                  key={message.id}
+                  key={`${conversation.locationId}_${conversation.participantId}`}
                   className={`bg-white rounded-xl p-4 mb-3 shadow-sm ${
-                    isUnread ? "border-l-4" : ""
-                  }
-                  style={
-                    isUnread
-                      ? { borderLeftColor: "#0086c9" }
-                      : undefined
+                    hasUnread ? "border-l-4" : ""
                   }`}
-                  onPress={() => handleMessagePress(message)}
+                  style={hasUnread ? { borderLeftColor: "#0086c9" } : undefined}
+                  onPress={() => handleConversationPress(conversation)}
                 >
                   <View className="flex-row justify-between items-start mb-2">
                     <View className="flex-1">
@@ -160,25 +235,31 @@ function MessagesScreen() {
                         {locationName}
                       </Text>
                     </View>
-                    {isUnread && (
-                      <View
-                        className="rounded-full w-2 h-2 mt-2"
-                        style={{ backgroundColor: "#0086c9" }}
-                      />
+                    {hasUnread && (
+                      <View className="flex-row items-center">
+                        {conversation.unreadCount > 1 && (
+                          <Text className="text-xs text-white bg-blue-600 rounded-full px-2 py-1 mr-2">
+                            {conversation.unreadCount}
+                          </Text>
+                        )}
+                        <View
+                          className="rounded-full w-2 h-2 mt-2"
+                          style={{ backgroundColor: "#0086c9" }}
+                        />
+                      </View>
                     )}
                   </View>
 
                   <Text className="text-gray-700 mb-2" numberOfLines={2}>
-                    {message.body}
+                    {conversation.mostRecentMessage.body}
                   </Text>
 
                   <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{otherName}</Text>
                     <Text className="text-sm text-gray-500">
-                      {format(
-                        new Date(message.sent_at || message.created_at),
-                        "MMM d, h:mm a"
-                      )}
+                      {participantName}
+                    </Text>
+                    <Text className="text-sm text-gray-500">
+                      {format(new Date(mostRecentTime), "MMM d, h:mm a")}
                     </Text>
                   </View>
                 </TouchableOpacity>

@@ -26,10 +26,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabAnimationProvider } from "@/components/TabAnimationContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { supabase } from "@/lib/supabase/client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { mockAdminUsers, mockOffices } from "@/lib/mock/data";
-import type { User, Message } from "@/lib/types/database.types";
-import { mockMessagesService } from "@/lib/mock/services";
+import type {
+  User,
+  Message,
+  Profile,
+  Location,
+} from "@/lib/types/database.types";
 import { ComposeSheetProvider } from "@/lib/contexts/ComposeSheetContext";
 
 const TAB_ROUTE_MAP: Record<string, string> = {
@@ -105,16 +109,191 @@ function TabsContent() {
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
   const [composeBody, setComposeBody] = useState("");
   const [composeSending, setComposeSending] = useState(false);
+  const [availableRecipientsData, setAvailableRecipientsData] = useState<
+    Array<Profile & { location?: Location; location_id?: string }>
+  >([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
 
-  const adminOfficeMap = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    mockOffices.forEach((office) => {
-      if (office.admin_user_id) {
-        map.set(office.admin_user_id, { id: office.id, name: office.name });
+  // Fetch available recipients from Supabase
+  const fetchAvailableRecipients = async () => {
+    if (!user) {
+      setAvailableRecipientsData([]);
+      return;
+    }
+
+    setLoadingRecipients(true);
+    try {
+      // Step 1: Get medical rep's accessible location IDs
+      const { data: medicalRep, error: medicalRepError } = await supabase
+        .from("medical_reps")
+        .select("id")
+        .eq("profile_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (medicalRepError) {
+        console.error("Error fetching medical rep:", medicalRepError);
+        setAvailableRecipientsData([]);
+        setLoadingRecipients(false);
+        return;
       }
-    });
-    return map;
-  }, []);
+
+      let accessibleLocationIds: string[] = [];
+
+      if (medicalRep) {
+        const medicalRepId = (medicalRep as { id: string }).id;
+        const { data: repLocations, error: repLocError } = await supabase
+          .from("medical_rep_locations")
+          .select("location_id")
+          .eq("medical_rep_id", medicalRepId)
+          .eq("relationship_status", "active");
+
+        if (repLocError) {
+          console.error("Error fetching medical rep locations:", repLocError);
+          setAvailableRecipientsData([]);
+          setLoadingRecipients(false);
+          return;
+        }
+
+        accessibleLocationIds = (repLocations || []).map(
+          (rl: any) => rl.location_id
+        );
+      } else if (user.user_type === "admin") {
+        // Admin can see all locations - fetch all active locations
+        const { data: allLocations, error: locationsError } = await supabase
+          .from("locations")
+          .select("id")
+          .eq("status", "active")
+          .is("deleted_at", null);
+
+        if (locationsError) {
+          console.error("Error fetching locations:", locationsError);
+        } else {
+          accessibleLocationIds = (allLocations || []).map(
+            (loc: any) => loc.id
+          );
+        }
+      }
+
+      if (accessibleLocationIds.length === 0) {
+        setAvailableRecipientsData([]);
+        setLoadingRecipients(false);
+        return;
+      }
+
+      // Step 2: Fetch profiles that are office_staff or location admins at accessible locations
+      // First, get all location admins for accessible locations
+      const { data: locationAdmins, error: adminsError } = await supabase
+        .from("user_roles")
+        .select("profile_id, location_id")
+        .in("location_id", accessibleLocationIds)
+        .eq("role", "location_admin")
+        .eq("status", "active");
+
+      if (adminsError) {
+        console.error("Error fetching location admins:", adminsError);
+      }
+
+      const adminProfileIds = new Set(
+        (locationAdmins || []).map((admin: any) => admin.profile_id)
+      );
+      const adminLocationMap = new Map<string, string>();
+      (locationAdmins || []).forEach((admin: any) => {
+        adminLocationMap.set(admin.profile_id, admin.location_id);
+      });
+
+      // Step 3: Fetch profiles that are office_staff with default_location_id in accessible locations
+      // OR profiles that are location admins
+      const profileIdsToFetch = Array.from(adminProfileIds);
+
+      // Query for office_staff with default_location_id in accessible locations
+      const { data: officeStaffProfiles, error: staffError } = await supabase
+        .from("profiles")
+        .select(
+          "id, full_name, email, phone, user_type, default_location_id, status"
+        )
+        .eq("user_type", "office_staff")
+        .eq("status", "active")
+        .in("default_location_id", accessibleLocationIds)
+        .neq("id", user.id);
+
+      if (staffError) {
+        console.error("Error fetching office staff:", staffError);
+      }
+
+      // Query for location admin profiles
+      let adminProfiles: any[] = [];
+      if (profileIdsToFetch.length > 0) {
+        const { data: adminProfilesData, error: adminProfilesError } =
+          await supabase
+            .from("profiles")
+            .select(
+              "id, full_name, email, phone, user_type, default_location_id, status"
+            )
+            .in("id", profileIdsToFetch)
+            .eq("status", "active")
+            .neq("id", user.id);
+
+        if (adminProfilesError) {
+          console.error("Error fetching admin profiles:", adminProfilesError);
+        } else {
+          adminProfiles = adminProfilesData || [];
+        }
+      }
+
+      // Combine and deduplicate profiles
+      const allProfiles = [
+        ...(officeStaffProfiles || []),
+        ...adminProfiles,
+      ].filter(
+        (profile, index, self) =>
+          index === self.findIndex((p) => p.id === profile.id)
+      );
+
+      // Fetch location information for each profile
+      const recipientsWithLocations = await Promise.all(
+        allProfiles.map(async (profile) => {
+          let locationId: string | undefined;
+          let location: Location | undefined;
+
+          // Determine location_id: use adminLocationMap for admins, or default_location_id for staff
+          if (adminLocationMap.has(profile.id)) {
+            locationId = adminLocationMap.get(profile.id);
+          } else {
+            locationId = profile.default_location_id || undefined;
+          }
+
+          // Fetch location details if we have a location_id
+          if (locationId) {
+            const { data: locationData, error: locationError } = await supabase
+              .from("locations")
+              .select(
+                "id, name, address_line1, address_line2, city, state, postal_code, phone"
+              )
+              .eq("id", locationId)
+              .maybeSingle();
+
+            if (!locationError && locationData) {
+              location = locationData as Location;
+            }
+          }
+
+          return {
+            ...profile,
+            location,
+            location_id: locationId,
+          };
+        })
+      );
+
+      setAvailableRecipientsData(recipientsWithLocations);
+    } catch (error) {
+      console.error("Error fetching available recipients:", error);
+      setAvailableRecipientsData([]);
+    } finally {
+      setLoadingRecipients(false);
+    }
+  };
 
   const existingParticipantIds = useMemo(() => {
     const ids = new Set<string>();
@@ -133,19 +312,28 @@ function TabsContent() {
     return ids;
   }, [cache.messages.messages.data, user?.id]);
 
+  // Fetch recipients when compose sheet opens
+  useEffect(() => {
+    if (showComposeSheet && user) {
+      fetchAvailableRecipients();
+    }
+  }, [showComposeSheet, user]);
+
   const availableRecipients = useMemo(() => {
     const query = recipientQuery.trim().toLowerCase();
-    return mockAdminUsers.filter((admin) => {
-      if (existingParticipantIds.has(admin.id)) {
+    return availableRecipientsData.filter((recipient) => {
+      // Exclude existing participants
+      if (existingParticipantIds.has(recipient.id)) {
         return false;
       }
+      // Filter by search query if provided
       if (!query) return true;
       return (
-        admin.full_name.toLowerCase().includes(query) ||
-        admin.email.toLowerCase().includes(query)
+        recipient.full_name.toLowerCase().includes(query) ||
+        recipient.email.toLowerCase().includes(query)
       );
     });
-  }, [recipientQuery, existingParticipantIds]);
+  }, [recipientQuery, existingParticipantIds, availableRecipientsData]);
 
   const openComposeSheet = () => {
     setRecipientQuery("");
@@ -196,14 +384,19 @@ function TabsContent() {
 
   const handleComposeSend = async () => {
     const trimmedBody = composeBody.trim();
-    if (!selectedRecipient || !trimmedBody) {
+    if (!selectedRecipient || !trimmedBody || !user) {
       return;
     }
 
-    const officeInfo = adminOfficeMap.get(selectedRecipient.id);
-    if (!officeInfo) {
+    // Get location_id from the recipient data
+    const recipientData = availableRecipientsData.find(
+      (r) => r.id === selectedRecipient.id
+    );
+    const locationId = recipientData?.location_id;
+
+    if (!locationId) {
       console.error(
-        "No office found for selected recipient",
+        "No location found for selected recipient",
         selectedRecipient.id
       );
       return;
@@ -211,11 +404,20 @@ function TabsContent() {
 
     setComposeSending(true);
     try {
-      await mockMessagesService.sendMessage(
-        selectedRecipient.id,
-        officeInfo.id,
-        trimmedBody
-      );
+      // Insert message into Supabase
+      const { error: insertError } = await supabase.from("messages").insert({
+        location_id: locationId,
+        sender_profile_id: user.id,
+        recipient_profile_id: selectedRecipient.id,
+        body: trimmedBody,
+        sent_at: new Date().toISOString(),
+      } as any);
+
+      if (insertError) {
+        console.error("Error sending message:", insertError);
+        return;
+      }
+
       closeComposeSheet();
       prefetchTabData("messages").catch((error) =>
         console.error("Error refreshing messages after compose:", error)
@@ -441,7 +643,14 @@ function TabsContent() {
               className="px-4 py-3"
               keyboardShouldPersistTaps="handled"
             >
-              {availableRecipients.length === 0 ? (
+              {loadingRecipients ? (
+                <View className="py-8 items-center">
+                  <ActivityIndicator size="small" color="#0086c9" />
+                  <Text className="text-gray-500 mt-2">
+                    Loading recipients...
+                  </Text>
+                </View>
+              ) : availableRecipients.length === 0 ? (
                 <Text className="text-gray-500 text-center">
                   No recipients available.
                 </Text>
