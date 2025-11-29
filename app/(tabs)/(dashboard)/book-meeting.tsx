@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
+  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
@@ -710,22 +711,24 @@ export default function BookMeetingScreen() {
   }, [selectedLocation, selectedDate, currentUserMedicalRepId]);
 
   useEffect(() => {
+    if (booking) return; // Don't reload slots during booking
     if (selectedLocation && selectedDate) {
       loadAvailableSlots();
     }
-  }, [selectedLocation, selectedDate, loadAvailableSlots]);
+  }, [selectedLocation, selectedDate, loadAvailableSlots, booking]);
 
   // Refresh meetings when screen comes into focus (force refresh)
   // This only runs when navigating TO this screen, not when changing date/location within the screen
   useFocusEffect(
     useCallback(() => {
+      if (booking) return; // Don't reload slots during booking
       console.log("Screen focused - refreshing time slots");
       // Just reload the slots for the current date
       // loadAvailableSlots fetches fresh data from DB internally
       if (selectedLocation && selectedDate) {
         loadAvailableSlots();
       }
-    }, [loadAvailableSlots, selectedLocation, selectedDate])
+    }, [loadAvailableSlots, selectedLocation, selectedDate, booking])
   );
 
   const formatTimeLabel = (time: string) => {
@@ -813,26 +816,29 @@ export default function BookMeetingScreen() {
         throw new Error("Unable to create meeting");
       }
 
-      Alert.alert(
-        "Meeting Scheduled",
-        `Your meeting at ${selectedLocation.name} is booked for ${format(
-          new Date(selectedDate),
-          "MMMM d, yyyy"
-        )} at ${formatTimeLabel(selectedTime)}.`,
-        [
-          {
-            text: "OK",
-            onPress: async () => {
-              setSelectedTime(null);
-              setSelectedDateIndex(0);
-              setSelectedLocationId(locations[0]?.id ?? null);
-              await prefetchTabData("calendar");
-              await prefetchTabData("dashboard");
-              router.back();
-            },
-          },
-        ]
-      );
+      // Format date and time for toast message
+      const formattedDate = format(new Date(selectedDate), "MMMM d, yyyy");
+      const formattedTime = formatTimeLabel(selectedTime);
+
+      // Reset form state
+      setSelectedTime(null);
+      setSelectedDateIndex(0);
+      setSelectedLocationId(locations[0]?.id ?? null);
+
+      // Prefetch data
+      await prefetchTabData("calendar");
+      await prefetchTabData("dashboard");
+
+      // Navigate to dashboard with success params
+      router.push({
+        pathname: "/(tabs)/(dashboard)" as any,
+        params: {
+          bookingSuccess: "true",
+          locationName: selectedLocation.name,
+          meetingDate: formattedDate,
+          meetingTime: formattedTime,
+        },
+      });
     } catch (error) {
       console.error("Error booking meeting:", error);
       const errorMessage =
@@ -855,6 +861,20 @@ export default function BookMeetingScreen() {
 
   return (
     <View className="flex-1 bg-gray-50 pt-6">
+      {/* Full-page loader modal during booking */}
+      <Modal visible={booking} transparent={true} animationType="fade">
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <View className="bg-white rounded-xl p-6 items-center">
+            <ActivityIndicator size="large" color="#0086c9" />
+            <Text className="text-gray-900 font-medium mt-4">
+              Booking meeting...
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
@@ -1324,7 +1344,9 @@ export default function BookMeetingScreen() {
           {booking ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-semibold text-lg">Continue</Text>
+            <Text className="text-white font-semibold text-lg">
+              Book meeting
+            </Text>
           )}
         </TouchableOpacity>
       </View>

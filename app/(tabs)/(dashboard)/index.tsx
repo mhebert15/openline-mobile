@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
@@ -15,6 +16,12 @@ import type { Meeting } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { CalendarIcon, MapPinIcon, ClockIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
+import {
+  useToast,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+} from "@/components/ui/toast";
 
 function DashboardScreen() {
   const { user } = useAuth();
@@ -22,10 +29,58 @@ function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
+  const toast = useToast();
+  const params = useLocalSearchParams<{
+    bookingSuccess?: string;
+    locationName?: string;
+    meetingDate?: string;
+    meetingTime?: string;
+  }>();
 
   const upcomingMeetings =
     (cache.dashboard.upcomingMeetings.data as Meeting[]) || [];
   const completedCount = cache.dashboard.completedCount.data || 0;
+
+  // Show toast when booking success params are present
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.bookingSuccess === "true") {
+        const locationName = params.locationName || "the location";
+        const meetingDate = params.meetingDate || "";
+        const meetingTime = params.meetingTime || "";
+
+        toast.show({
+          placement: "top",
+          render: ({ id }) => {
+            return (
+              <Toast nativeID={`toast-${id}`} action="success" variant="solid">
+                <ToastTitle>Meeting Scheduled</ToastTitle>
+                <ToastDescription>
+                  Your meeting at {locationName} is booked for {meetingDate} at{" "}
+                  {meetingTime}.
+                </ToastDescription>
+              </Toast>
+            );
+          },
+        });
+
+        // Clear params to prevent re-showing
+        router.setParams({
+          bookingSuccess: undefined,
+          locationName: undefined,
+          meetingDate: undefined,
+          meetingTime: undefined,
+        });
+      }
+    }, [
+      params.bookingSuccess,
+      params.locationName,
+      params.meetingDate,
+      params.meetingTime,
+      toast,
+      router,
+    ])
+  );
 
   // Helper function to get status badge styling
   const getStatusBadgeStyle = (status: string) => {

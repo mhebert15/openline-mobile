@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Pressable,
   Alert,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { format } from "date-fns";
@@ -22,9 +23,7 @@ import { supabase } from "@/lib/supabase/client";
 import type {
   Meeting,
   Practitioner,
-  PreferredMeetingTimes,
   FoodPreferences,
-  LocationHours,
   User,
 } from "@/lib/types/database.types";
 import { mockMeetings, mockOffices } from "@/lib/mock/data";
@@ -36,11 +35,8 @@ export default function MeetingDetailScreen() {
   const { user } = useAuth();
 
   const [practitioners, setPractitioners] = useState<Practitioner[]>([]);
-  const [preferredMeetingTimes, setPreferredMeetingTimes] =
-    useState<PreferredMeetingTimes | null>(null);
   const [foodPreferences, setFoodPreferences] =
     useState<FoodPreferences | null>(null);
-  const [locationHours, setLocationHours] = useState<LocationHours[]>([]);
   const [officeStaff, setOfficeStaff] = useState<User[]>([]);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loadedLocationId, setLoadedLocationId] = useState<string | null>(null);
@@ -134,54 +130,6 @@ export default function MeetingDetailScreen() {
           }
         }
 
-        // Fetch preferred meeting times
-        const { data: timeSlotsData } = await supabase
-          .from("locations")
-          .select(
-            "id, location_preferred_time_slots(day_of_week, start_time, end_time, is_active)"
-          )
-          .eq("id", locationId)
-          .single();
-
-        const timeSlotsList = (
-          (timeSlotsData as any)?.location_preferred_time_slots || []
-        ).filter((slot: any) => slot.is_active === true);
-
-        const preferredTimes: PreferredMeetingTimes = {
-          monday: [],
-          tuesday: [],
-          wednesday: [],
-          thursday: [],
-          friday: [],
-        };
-
-        const dayMap: Record<number, keyof PreferredMeetingTimes> = {
-          1: "monday", // location_preferred_time_slots uses: 1=Monday, 2=Tuesday, etc.
-          2: "tuesday",
-          3: "wednesday",
-          4: "thursday",
-          5: "friday",
-        };
-
-        const sortedSlots = (timeSlotsList as any[]).sort((a, b) => {
-          if (a.day_of_week !== b.day_of_week) {
-            return a.day_of_week - b.day_of_week;
-          }
-          return a.start_time.localeCompare(b.start_time);
-        });
-
-        sortedSlots.forEach((slot: any) => {
-          const day = dayMap[slot.day_of_week];
-          if (day) {
-            const timeStr = `${slot.start_time} - ${slot.end_time}`;
-            preferredTimes[day].push(timeStr);
-          }
-        });
-
-        if (Object.values(preferredTimes).some((times) => times.length > 0)) {
-          setPreferredMeetingTimes(preferredTimes);
-        }
-
         // Fetch food preferences
         const { data: foodPrefData } = await supabase
           .from("food_preferences")
@@ -232,17 +180,6 @@ export default function MeetingDetailScreen() {
           });
         }
 
-        // Fetch location hours
-        const { data: hoursData } = await supabase
-          .from("location_hours")
-          .select("id, day_of_week, open_time, close_time, is_closed")
-          .eq("location_id", locationId)
-          .order("day_of_week", { ascending: true });
-
-        if (hoursData) {
-          setLocationHours((hoursData as LocationHours[]) || []);
-        }
-
         // Fetch office staff
         const { data: staffRoles } = await supabase
           .from("user_roles")
@@ -273,9 +210,7 @@ export default function MeetingDetailScreen() {
     if (id) {
       setLoadedLocationId(null);
       setPractitioners([]);
-      setPreferredMeetingTimes(null);
       setFoodPreferences(null);
-      setLocationHours([]);
       setOfficeStaff([]);
       setPractitionerAvailability({});
     }
@@ -363,15 +298,13 @@ export default function MeetingDetailScreen() {
 
       console.log("Meeting successfully cancelled:", meeting.id);
 
-      // Invalidate cache to refresh data
-      invalidateTab("dashboard");
-      invalidateTab("calendar");
-
-      // Prefetch updated data
+      // Prefetch updated data first (this updates cache with fresh data, excluding cancelled meeting)
+      // Prefetching will automatically exclude cancelled meetings since the query filters by status
       await prefetchTabData("dashboard");
       await prefetchTabData("calendar");
 
       // Navigate back to dashboard
+      // Dashboard will already have fresh data in cache, so no loading state will appear
       router.back();
     } catch (error) {
       console.error("Error canceling meeting:", error);
@@ -456,6 +389,20 @@ export default function MeetingDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
+      {/* Full-page loader modal during cancellation */}
+      <Modal visible={canceling} transparent={true} animationType="fade">
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ backgroundColor: "rgba(0, 0, 0, 0.5)" }}
+        >
+          <View className="bg-white rounded-xl p-6 items-center">
+            <ActivityIndicator size="large" color="#0086c9" />
+            <Text className="text-gray-900 font-medium mt-4">
+              Canceling meeting...
+            </Text>
+          </View>
+        </View>
+      </Modal>
       <View>
         <View className="bg-white p-4 shadow-sm">
           <View className="flex-row items-center mb-3">
@@ -600,108 +547,6 @@ export default function MeetingDetailScreen() {
                           </Text>
                         </View>
                       </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Location Hours */}
-            {locationHours.length > 0 && (
-              <View className="bg-white rounded-xl p-4 shadow-sm mb-4 mx-4">
-                <View className="flex-row items-center mb-3">
-                  <ClockIcon size={20} color="#0086c9" />
-                  <Text className="text-lg font-semibold text-gray-900 ml-2">
-                    Location Hours
-                  </Text>
-                </View>
-                {locationHours.map((hour) => {
-                  const dayNames = [
-                    "Sunday",
-                    "Monday",
-                    "Tuesday",
-                    "Wednesday",
-                    "Thursday",
-                    "Friday",
-                    "Saturday",
-                  ];
-                  const formatTime = (time: string | null): string => {
-                    if (!time) return "";
-                    const [hours, minutes] = time.split(":");
-                    const hour = parseInt(hours, 10);
-                    const ampm = hour >= 12 ? "PM" : "AM";
-                    const displayHour = hour % 12 || 12;
-                    return `${displayHour}:${minutes} ${ampm}`;
-                  };
-                  return (
-                    <View
-                      key={hour.id}
-                      className="flex-row justify-between items-center py-2 border-b border-gray-100 last:border-b-0"
-                    >
-                      <Text className="text-gray-900 font-medium">
-                        {dayNames[hour.day_of_week]}
-                      </Text>
-                      {hour.is_closed ? (
-                        <Text className="text-gray-500 text-sm">Closed</Text>
-                      ) : (
-                        <Text className="text-gray-600 text-sm">
-                          {formatTime(hour.open_time)} -{" "}
-                          {formatTime(hour.close_time)}
-                        </Text>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Preferred Meeting Times */}
-            {preferredMeetingTimes && (
-              <View className="bg-white rounded-xl p-4 mb-4 mx-4 shadow-sm">
-                <View className="flex-row items-center mb-3">
-                  <CalendarIcon size={20} color="#0086c9" />
-                  <Text className="text-lg font-semibold text-gray-900 ml-2">
-                    Preferred Meeting Times
-                  </Text>
-                </View>
-                {[
-                  { key: "monday", label: "Monday" },
-                  { key: "tuesday", label: "Tuesday" },
-                  { key: "wednesday", label: "Wednesday" },
-                  { key: "thursday", label: "Thursday" },
-                  { key: "friday", label: "Friday" },
-                ].map((day) => {
-                  const times =
-                    preferredMeetingTimes[
-                      day.key as keyof PreferredMeetingTimes
-                    ];
-                  if (!times || times.length === 0) return null;
-
-                  const formatTimeRange = (timeRange: string): string => {
-                    const [startTime, endTime] = timeRange.split(" - ");
-                    if (!startTime || !endTime) return timeRange;
-
-                    const formatTime = (time: string): string => {
-                      const [hours, minutes] = time.split(":");
-                      const hour = parseInt(hours, 10);
-                      const ampm = hour >= 12 ? "PM" : "AM";
-                      const displayHour = hour % 12 || 12;
-                      return `${displayHour}:${minutes} ${ampm}`;
-                    };
-
-                    return `${formatTime(startTime)} - ${formatTime(endTime)}`;
-                  };
-
-                  return (
-                    <View key={day.key} className="py-2">
-                      <Text className="text-gray-900 font-medium">
-                        {day.label}
-                      </Text>
-                      {times.map((time, idx) => (
-                        <Text key={idx} className="text-gray-600 text-sm mt-1">
-                          {formatTimeRange(time)}
-                        </Text>
-                      ))}
                     </View>
                   );
                 })}
