@@ -46,7 +46,7 @@ function SettingsScreen() {
               className="text-sm font-medium capitalize"
               style={{ color: "#0086c9" }}
             >
-              {user?.role?.replace("_", " ")}
+              {user?.user_type?.replace("_", " ")}
             </Text>
           </View>
         </View>
@@ -57,23 +57,17 @@ function SettingsScreen() {
         <SettingsItem
           icon={<UserIcon size={24} color="#6b7280" />}
           title="Profile Settings"
-          onPress={() =>
-            Alert.alert("Coming Soon", "Profile settings coming soon!")
-          }
+          onPress={() => router.push("/(tabs)/settings/profile-settings")}
         />
         <SettingsItem
           icon={<BellIcon size={24} color="#6b7280" />}
           title="Notification Settings"
-          onPress={() =>
-            Alert.alert("Coming Soon", "Notification settings coming soon!")
-          }
+          onPress={() => router.push("/(tabs)/settings/notification-settings")}
         />
         <SettingsItem
           icon={<ShieldIcon size={24} color="#6b7280" />}
           title="Privacy & Security"
-          onPress={() =>
-            Alert.alert("Coming Soon", "Privacy settings coming soon!")
-          }
+          onPress={() => router.push("/(tabs)/settings/privacy-security")}
         />
       </View>
 
@@ -82,7 +76,7 @@ function SettingsScreen() {
         <SettingsItem
           icon={<HelpCircleIcon size={24} color="#6b7280" />}
           title="Help & Support"
-          onPress={() => Alert.alert("Coming Soon", "Help center coming soon!")}
+          onPress={() => router.push("/(tabs)/settings/help-support")}
         />
       </View>
 

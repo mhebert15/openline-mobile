@@ -42,28 +42,53 @@ export default function MessageDetailScreen() {
 
     setLoading(true);
     try {
-      // Fetch messages for this specific conversation thread
-      // Filter by location_id and where user is either sender or recipient
-      // Also filter by participantId to show only messages with that specific participant
-      // We need messages where:
-      //   - location_id matches
-      //   - AND (user is sender AND participant is recipient) OR (user is recipient AND participant is sender)
-      const { data: messagesData, error: messagesError } = await supabase
+      // Determine message type: if participantId exists, it's a direct message conversation
+      // Otherwise, it's a location broadcast
+      const isDirectMessage = !!participantId;
+
+      let messagesQuery = supabase
         .from("messages")
         .select(
-          "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, read_at, created_at, updated_at, sender:profiles!messages_sender_profile_id_fkey(id, full_name, email, phone, user_type, status), recipient:profiles!messages_recipient_profile_id_fkey(id, full_name, email, phone, user_type, status)"
+          "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, sender:profiles!messages_sender_profile_id_fkey(id, full_name, email, phone, user_type, status), recipient:profiles!messages_recipient_profile_id_fkey(id, full_name, email, phone, user_type, status)"
         )
-        .eq("location_id", locationId)
-        .or(
-          `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${participantId}),and(sender_profile_id.eq.${participantId},recipient_profile_id.eq.${user.id})`
-        )
-        .order("sent_at", { ascending: true });
+        .eq("location_id", locationId);
+
+      if (isDirectMessage) {
+        // Direct messages: filter by location_id AND participant
+        messagesQuery = messagesQuery
+          .eq("message_type", "direct")
+          .or(
+            `and(sender_profile_id.eq.${user.id},recipient_profile_id.eq.${participantId}),and(sender_profile_id.eq.${participantId},recipient_profile_id.eq.${user.id})`
+          );
+      } else {
+        // Broadcast messages: filter by location_id only
+        messagesQuery = messagesQuery.eq("message_type", "location_broadcast");
+      }
+
+      const { data: messagesData, error: messagesError } =
+        await messagesQuery.order("sent_at", { ascending: true });
 
       if (messagesError) {
         console.error("Error fetching messages:", messagesError);
         setMessages([]);
         setLoading(false);
         return;
+      }
+
+      // Fetch message_reads for current user to determine read status
+      const messageIds = (messagesData || []).map((msg: any) => msg.id);
+      let readStatusMap = new Map<string, boolean>();
+
+      if (messageIds.length > 0) {
+        const { data: readsData } = await supabase
+          .from("message_reads")
+          .select("message_id")
+          .eq("profile_id", user.id)
+          .in("message_id", messageIds);
+
+        readStatusMap = new Map(
+          (readsData || []).map((read: any) => [read.message_id, true])
+        );
       }
 
       // Map the data to match Message interface
@@ -76,7 +101,7 @@ export default function MessageDetailScreen() {
         recipient_profile_id: msg.recipient_profile_id,
         body: msg.body,
         sent_at: msg.sent_at,
-        read_at: msg.read_at,
+        message_type: msg.message_type || "direct",
         created_at: msg.created_at,
         updated_at: msg.updated_at,
         sender: msg.sender ? (msg.sender as any) : undefined,
@@ -84,6 +109,26 @@ export default function MessageDetailScreen() {
       }));
 
       setMessages(messages);
+
+      // Mark messages as read when viewing them
+      const unreadMessageIds = messageIds.filter(
+        (id: string) =>
+          !readStatusMap.has(id) &&
+          messagesArray.find(
+            (m: any) => m.id === id && m.sender_profile_id !== user.id
+          )
+      );
+
+      if (unreadMessageIds.length > 0) {
+        // Insert read records for unread messages
+        const readsToInsert = unreadMessageIds.map((messageId: string) => ({
+          message_id: messageId,
+          profile_id: user.id,
+          read_at: new Date().toISOString(),
+        }));
+
+        await supabase.from("message_reads").insert(readsToInsert as any);
+      }
 
       // Scroll to bottom after messages load
       setTimeout(() => {
@@ -100,20 +145,36 @@ export default function MessageDetailScreen() {
   const handleSend = async () => {
     const trimmed = messageText.trim();
 
-    if (!trimmed || !user || !locationId || !participantId) {
+    if (!trimmed || !user || !locationId) {
+      return;
+    }
+
+    // For direct messages, participantId is required
+    // For broadcast messages, participantId is not needed
+    const isDirectMessage = !!participantId;
+    if (isDirectMessage && !participantId) {
       return;
     }
 
     setSending(true);
     try {
       // Insert new message into Supabase
-      const { error: insertError } = await supabase.from("messages").insert({
+      const messageData: any = {
         location_id: locationId,
         sender_profile_id: user.id,
-        recipient_profile_id: participantId,
         body: trimmed,
         sent_at: new Date().toISOString(),
-      } as any);
+        message_type: isDirectMessage ? "direct" : "location_broadcast",
+      };
+
+      // Only set recipient_profile_id for direct messages
+      if (isDirectMessage) {
+        messageData.recipient_profile_id = participantId;
+      }
+
+      const { error: insertError } = await supabase
+        .from("messages")
+        .insert(messageData);
 
       if (insertError) {
         console.error("Error sending message:", insertError);

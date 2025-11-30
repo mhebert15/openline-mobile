@@ -415,18 +415,83 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: true,
               }));
 
-              // Fetch messages where user is either sender or recipient
-              // Include location and profile data
-              const { data: messagesData, error: messagesError } =
+              // Fetch messages where user is either sender or recipient (direct messages)
+              // OR broadcast messages at locations the user has access to
+              // First, get accessible location IDs for broadcast messages
+              let accessibleLocationIds: string[] = [];
+
+              // Get medical rep's accessible locations
+              const { data: medicalRep, error: medicalRepError } =
                 await supabase
-                  .from("messages")
-                  .select(
-                    "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, read_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone), sender:profiles!sender_profile_id(id, full_name, email, phone, user_type, status), recipient:profiles!recipient_profile_id(id, full_name, email, phone, user_type, status)"
-                  )
-                  .or(
-                    `sender_profile_id.eq.${user.id},recipient_profile_id.eq.${user.id}`
-                  )
-                  .order("sent_at", { ascending: false });
+                  .from("medical_reps")
+                  .select("id")
+                  .eq("profile_id", user.id)
+                  .eq("status", "active")
+                  .maybeSingle();
+
+              if (!medicalRepError && medicalRep) {
+                const medicalRepId = (medicalRep as { id: string }).id;
+                const { data: repLocations } = await supabase
+                  .from("medical_rep_locations")
+                  .select("location_id")
+                  .eq("medical_rep_id", medicalRepId)
+                  .eq("relationship_status", "active");
+
+                accessibleLocationIds = (repLocations || []).map(
+                  (rl: any) => rl.location_id
+                );
+              } else if (user.user_type === "admin") {
+                // Admin can see all locations
+                const { data: allLocations } = await supabase
+                  .from("locations")
+                  .select("id")
+                  .eq("status", "active")
+                  .is("deleted_at", null);
+                accessibleLocationIds = (allLocations || []).map(
+                  (loc: any) => loc.id
+                );
+              }
+
+              // Also check if user is office staff at any location
+              const { data: userRoles } = await supabase
+                .from("user_roles")
+                .select("location_id")
+                .eq("profile_id", user.id)
+                .eq("status", "active");
+
+              const staffLocationIds = (userRoles || []).map(
+                (ur: any) => ur.location_id
+              );
+              const allAccessibleLocationIds = [
+                ...new Set([...accessibleLocationIds, ...staffLocationIds]),
+              ];
+
+              // Build query: direct messages OR broadcast messages at accessible locations
+              let messagesQuery = supabase
+                .from("messages")
+                .select(
+                  "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone), sender:profiles!sender_profile_id(id, full_name, email, phone, user_type, status), recipient:profiles!recipient_profile_id(id, full_name, email, phone, user_type, status)"
+                );
+
+              // For direct messages: user is sender or recipient
+              // For broadcast messages: location_id is in accessible locations
+              if (allAccessibleLocationIds.length > 0) {
+                messagesQuery = messagesQuery.or(
+                  `sender_profile_id.eq.${user.id},recipient_profile_id.eq.${
+                    user.id
+                  },and(message_type.eq.location_broadcast,location_id.in.(${allAccessibleLocationIds.join(
+                    ","
+                  )}))`
+                );
+              } else {
+                // No accessible locations, only show direct messages
+                messagesQuery = messagesQuery.or(
+                  `sender_profile_id.eq.${user.id},recipient_profile_id.eq.${user.id}`
+                );
+              }
+
+              const { data: messagesData, error: messagesError } =
+                await messagesQuery.order("sent_at", { ascending: false });
 
               if (messagesError) {
                 console.error("Error fetching messages:", messagesError);
@@ -462,7 +527,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 recipient_profile_id: msg.recipient_profile_id,
                 body: msg.body,
                 sent_at: msg.sent_at,
-                read_at: msg.read_at,
+                message_type: msg.message_type || "direct", // Default to "direct" for backward compatibility
                 created_at: msg.created_at,
                 updated_at: msg.updated_at,
                 location: msg.locations

@@ -234,12 +234,19 @@ export interface Message {
   recipient_profile_id: string | null;
   body: string;
   sent_at: string;
-  read_at: string | null;
+  message_type: "direct" | "location_broadcast";
   created_at: string;
   updated_at: string;
   location?: Location;
   sender?: Profile;
   recipient?: Profile;
+}
+
+// MessageRead table structure from Supabase (matches message_reads table)
+export interface MessageRead {
+  message_id: string;
+  profile_id: string;
+  read_at: string;
 }
 
 export interface TimeSlot {

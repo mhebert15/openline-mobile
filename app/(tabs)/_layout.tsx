@@ -405,12 +405,14 @@ function TabsContent() {
     setComposeSending(true);
     try {
       // Insert message into Supabase
+      // Always use "direct" message_type when sending to a specific recipient
       const { error: insertError } = await supabase.from("messages").insert({
         location_id: locationId,
         sender_profile_id: user.id,
         recipient_profile_id: selectedRecipient.id,
         body: trimmedBody,
         sent_at: new Date().toISOString(),
+        message_type: "direct",
       } as any);
 
       if (insertError) {

@@ -12,6 +12,7 @@ export default function MessagesLayout() {
           fontWeight: "600",
         },
         headerBackTitle: "Back",
+        headerBackButtonDisplayMode: "minimal",
       }}
     >
       <Stack.Screen
@@ -22,9 +23,19 @@ export default function MessagesLayout() {
       />
       <Stack.Screen
         name="message-detail"
-        options={({ route }) => ({
-          headerTitle: (route.params as any)?.officeName || "Message",
-        })}
+        options={({ route }) => {
+          const params = route.params as any;
+          const title = params?.participantId
+            ? params?.participantName || "Message"
+            : params?.locationName || "Message";
+
+          const truncatedTitle =
+            title.length > 30 ? `${title.substring(0, 27)}...` : title;
+
+          return {
+            headerTitle: truncatedTitle,
+          };
+        }}
       />
     </Stack>
   );
