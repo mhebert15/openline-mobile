@@ -1138,14 +1138,39 @@ export default function BookMeetingScreen() {
                             {slot.availableProviders &&
                             slot.availableProviders.length > 0 ? (
                               slot.availableProviders.map((provider, idx) => (
-                                <Text
+                                <View
                                   key={idx}
-                                  className={`text-xs ${
-                                    disabled ? "text-gray-400" : "text-gray-500"
-                                  }`}
+                                  className="flex-row items-center mb-1"
                                 >
-                                  {provider}
-                                </Text>
+                                  <View
+                                    className="rounded-full mr-2"
+                                    style={{
+                                      width: 12,
+                                      height: 12,
+                                      backgroundColor: "#10b981",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        backgroundColor: "white",
+                                        borderRadius: 3,
+                                      }}
+                                    />
+                                  </View>
+                                  <Text
+                                    className={`text-xs ${
+                                      disabled
+                                        ? "text-gray-400"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    {provider}
+                                  </Text>
+                                </View>
                               ))
                             ) : (
                               <Text
@@ -1256,14 +1281,39 @@ export default function BookMeetingScreen() {
                             {slot.availableProviders &&
                             slot.availableProviders.length > 0 ? (
                               slot.availableProviders.map((provider, idx) => (
-                                <Text
+                                <View
                                   key={idx}
-                                  className={`text-xs ${
-                                    disabled ? "text-gray-400" : "text-gray-500"
-                                  }`}
+                                  className="flex-row items-center mb-1"
                                 >
-                                  {provider}
-                                </Text>
+                                  <View
+                                    className="rounded-full mr-2"
+                                    style={{
+                                      width: 12,
+                                      height: 12,
+                                      backgroundColor: "#10b981",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  >
+                                    <View
+                                      style={{
+                                        width: 6,
+                                        height: 6,
+                                        backgroundColor: "white",
+                                        borderRadius: 3,
+                                      }}
+                                    />
+                                  </View>
+                                  <Text
+                                    className={`text-xs ${
+                                      disabled
+                                        ? "text-gray-400"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    {provider}
+                                  </Text>
+                                </View>
                               ))
                             ) : (
                               <Text
