@@ -6,6 +6,7 @@ export interface Profile {
   full_name: string;
   email: string;
   phone: string | null;
+  image_url: string | null;
   user_type: string; // 'office_staff' | 'medical_rep' | 'admin' | etc.
   default_company_id: string | null;
   default_location_id: string | null;

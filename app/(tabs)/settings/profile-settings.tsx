@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Image } from "react-native";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { UserIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
 function ProfileSettingsScreen() {
@@ -9,6 +10,19 @@ function ProfileSettingsScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-50">
       <View className="bg-white p-6 mb-2">
+        <View className="items-center mb-6">
+          <View className="bg-blue-100 rounded-full w-24 h-24 items-center justify-center overflow-hidden">
+            {user?.image_url ? (
+              <Image
+                source={{ uri: user.image_url }}
+                className="w-24 h-24 rounded-full"
+                style={{ width: 96, height: 96 }}
+              />
+            ) : (
+              <UserIcon size={48} color="#0086c9" />
+            )}
+          </View>
+        </View>
         <Text className="text-lg font-semibold text-gray-900 mb-4">
           Profile Information
         </Text>

@@ -1,5 +1,12 @@
 import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Image,
+} from "react-native";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useRouter } from "expo-router";
 import {
@@ -34,8 +41,16 @@ function SettingsScreen() {
       {/* User Profile Section */}
       <View className="bg-white p-6 mb-2">
         <View className="items-center">
-          <View className="bg-blue-100 rounded-full w-20 h-20 items-center justify-center mb-3">
-            <UserIcon size={40} color="#0086c9" />
+          <View className="bg-blue-100 rounded-full w-20 h-20 items-center justify-center mb-3 overflow-hidden">
+            {user?.image_url ? (
+              <Image
+                source={{ uri: user.image_url }}
+                className="w-20 h-20 rounded-full"
+                style={{ width: 80, height: 80 }}
+              />
+            ) : (
+              <UserIcon size={40} color="#0086c9" />
+            )}
           </View>
           <Text className="text-xl font-bold text-gray-900">
             {user?.full_name}
