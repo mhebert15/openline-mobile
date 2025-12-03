@@ -162,12 +162,50 @@ export default function BookMeetingScreen() {
         dayNumber: format(date, "d"),
         monthLabel: format(date, "MMM"),
         dayOfWeek,
+        isToday: index === 0,
       };
     });
 
     // Filter out days where the office is closed
-    return allDates.filter((dateOption) => isDayOpen(dateOption.dayOfWeek));
-  }, [isDayOpen]);
+    let filteredDates = allDates.filter((dateOption) =>
+      isDayOpen(dateOption.dayOfWeek)
+    );
+
+    // If today is in the list and location has closed, remove it
+    const todayOption = filteredDates.find((d) => d.isToday);
+    if (todayOption) {
+      const todayDayOfWeek = today.getDay();
+      const hoursForToday = locationHours.find(
+        (h) => h.day_of_week === todayDayOfWeek
+      );
+
+      if (
+        hoursForToday &&
+        hoursForToday.close_time &&
+        !hoursForToday.is_closed
+      ) {
+        // Parse close time (format: "HH:mm:ss" or "HH:mm")
+        const [closeHour, closeMinute] = hoursForToday.close_time
+          .split(":")
+          .map(Number);
+
+        // Get current time
+        const currentHour = today.getHours();
+        const currentMinute = today.getMinutes();
+
+        // Convert to minutes for comparison
+        const closeTimeMinutes = closeHour * 60 + closeMinute;
+        const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+        // If current time is after close time, remove today
+        if (currentTimeMinutes >= closeTimeMinutes) {
+          filteredDates = filteredDates.filter((d) => !d.isToday);
+        }
+      }
+    }
+
+    return filteredDates;
+  }, [isDayOpen, locationHours]);
 
   // Reset selected date index if current selection is no longer valid
   useEffect(() => {

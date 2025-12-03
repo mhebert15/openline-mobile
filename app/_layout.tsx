@@ -1,3 +1,5 @@
+import "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import "@/global.css";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
@@ -38,14 +40,14 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  if (!loaded) {
-    return null;
-  }
-
   return (
-    <AuthProvider>
-      <RootLayoutNav />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {!loaded ? null : (
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      )}
+    </GestureHandlerRootView>
   );
 }
 
@@ -62,13 +64,13 @@ function RootLayoutNav() {
 
     // Use setTimeout to avoid navigation loops
     const timeoutId = setTimeout(() => {
-    if (!user && !inAuthGroup) {
-      // Redirect to sign-in if not authenticated
-      router.replace("/(auth)/sign-in");
-    } else if (user && inAuthGroup) {
-      // Redirect to main app if authenticated
-      router.replace("/(tabs)/(dashboard)");
-    }
+      if (!user && !inAuthGroup) {
+        // Redirect to sign-in if not authenticated
+        router.replace("/(auth)/sign-in");
+      } else if (user && inAuthGroup) {
+        // Redirect to main app if authenticated
+        router.replace("/(tabs)/(dashboard)");
+      }
     }, 0);
 
     return () => clearTimeout(timeoutId);

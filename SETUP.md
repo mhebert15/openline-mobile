@@ -391,7 +391,63 @@ CREATE POLICY "Users can view their own data"
 3. Copy "anon/public" key
 4. Add to `.env` file
 
-### 5. Update Code
+### 5. Set Up Supabase Storage (For Profile Images)
+
+To enable profile image uploads, you need to create a storage bucket:
+
+1. **Navigate to Storage**:
+
+   - Go to your Supabase Dashboard
+   - Click on "Storage" in the left sidebar
+
+2. **Create a New Bucket**:
+
+   - Click "New Bucket"
+   - Name: `profile-images`
+   - **Important**: Set the bucket to **Public** (toggle "Public bucket" to ON)
+   - File size limit: 5MB (recommended)
+   - Click "Create bucket"
+
+3. **Configure Storage Policies** (Optional but Recommended):
+
+   - Click on the `profile-images` bucket
+   - Go to "Policies" tab
+   - Add a policy to allow authenticated users to upload:
+
+     ```sql
+     -- Allow authenticated users to upload their own profile images
+     CREATE POLICY "Users can upload profile images"
+     ON storage.objects FOR INSERT
+     TO authenticated
+     WITH CHECK (
+       bucket_id = 'profile-images' AND
+       (storage.foldername(name))[1] = auth.uid()::text
+     );
+
+     -- Allow authenticated users to update their own profile images
+     CREATE POLICY "Users can update their own profile images"
+     ON storage.objects FOR UPDATE
+     TO authenticated
+     USING (
+       bucket_id = 'profile-images' AND
+       (storage.foldername(name))[1] = auth.uid()::text
+     );
+
+     -- Allow public read access (since bucket is public)
+     CREATE POLICY "Public can read profile images"
+     ON storage.objects FOR SELECT
+     TO public
+     USING (bucket_id = 'profile-images');
+     ```
+
+4. **Verify Setup**:
+   - The bucket should be visible in Storage section
+   - Bucket should be marked as "Public"
+   - Try uploading a profile image in the app to test
+
+**Note**: If you're using local Supabase (via `supabase start`), the storage bucket will be created automatically when you first try to upload. However, for production, you should create it manually in the Supabase Dashboard.
+
+### 6. Update Code
 
 Replace mock service calls with Supabase queries. Example:
 

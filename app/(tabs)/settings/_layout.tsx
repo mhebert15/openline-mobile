@@ -1,7 +1,10 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { TouchableOpacity, Text } from "react-native";
+import { getOpenEditSheetFn } from "./edit-sheet-utils";
 
 export default function SettingsLayout() {
+  const router = useRouter();
+
   return (
     <Stack
       screenOptions={{
@@ -30,7 +33,17 @@ export default function SettingsLayout() {
             <TouchableOpacity
               style={{ padding: 8 }}
               onPress={() => {
-                // Edit functionality will be implemented in the screen
+                console.log("Edit button pressed");
+                // Try direct call first (more reliable)
+                const openFn = getOpenEditSheetFn();
+                console.log("Open function:", openFn);
+                if (openFn) {
+                  openFn();
+                } else {
+                  // Fallback to router params
+                  console.log("Falling back to router params");
+                  router.setParams({ openEdit: "true" });
+                }
               }}
             >
               <Text

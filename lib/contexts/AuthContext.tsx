@@ -20,6 +20,7 @@ interface AuthContextType {
     token: string
   ) => Promise<{ success: boolean; message: string }>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -285,6 +286,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function refreshProfile() {
+    if (!supabaseUser) return;
+    await loadUserProfileSilently(supabaseUser);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -295,6 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         verifyOtp,
         signOut,
+        refreshProfile,
       }}
     >
       {children}
