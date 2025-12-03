@@ -124,7 +124,7 @@ export default function LocationDetailScreen() {
       const { data: providersData, error: providersError } = await supabase
         .from("locations")
         .select(
-          "id, providers(id, location_id, profile_id, first_name, last_name, credential, specialty, email, phone, status, created_at, updated_at)"
+          "id, providers(id, location_id, profile_id, first_name, last_name, credential, specialty, email, phone, image_url, status, created_at, updated_at)"
         )
         .eq("id", id)
         .single();

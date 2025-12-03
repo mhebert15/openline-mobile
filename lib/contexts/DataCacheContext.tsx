@@ -153,7 +153,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         locationsQuery = supabase
           .from("locations")
           .select(
-            "id, name, address_line1, address_line2, city, state, postal_code, phone, status, created_at"
+            "id, name, address_line1, address_line2, city, state, postal_code, phone, image_url, status, created_at"
           )
           .eq("status", "active")
           .is("deleted_at", null)
@@ -163,7 +163,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         locationsQuery = supabase
           .from("locations")
           .select(
-            "id, name, address_line1, address_line2, city, state, postal_code, phone, status, created_at"
+            "id, name, address_line1, address_line2, city, state, postal_code, phone, image_url, status, created_at"
           )
           .eq("status", "active")
           .is("deleted_at", null);
@@ -247,7 +247,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
               let upcomingMeetingsQuery = supabase
                 .from("meetings")
                 .select(
-                  "id, location_id, medical_rep_id, requested_by_profile_id, provider_id, food_preferences_id, meeting_type, title, description, start_at, end_at, status, auto_approved, approved_by_profile_id, approved_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone)"
+                  "id, location_id, medical_rep_id, requested_by_profile_id, provider_id, food_preferences_id, meeting_type, title, description, start_at, end_at, status, auto_approved, approved_by_profile_id, approved_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone, image_url)"
                 )
                 .in("status", ["pending", "approved"])
                 .gte("start_at", now)
@@ -341,6 +341,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                       country: "", // Not fetched, but required by type
                       timezone: null,
                       phone: m.locations.phone,
+                      image_url: m.locations.image_url || null,
                       status: m.locations.status || "active",
                       created_at: "",
                       updated_at: "",
@@ -470,7 +471,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
               let messagesQuery = supabase
                 .from("messages")
                 .select(
-                  "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone), sender:profiles!sender_profile_id(id, full_name, email, phone, user_type, status), recipient:profiles!recipient_profile_id(id, full_name, email, phone, user_type, status)"
+                  "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone, image_url), sender:profiles!sender_profile_id(id, full_name, email, phone, user_type, status), recipient:profiles!recipient_profile_id(id, full_name, email, phone, user_type, status)"
                 );
 
               // For direct messages: user is sender or recipient

@@ -44,6 +44,7 @@ export interface Location {
   country: string;
   timezone: string | null;
   phone: string | null;
+  image_url: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -132,6 +133,7 @@ export interface Practitioner {
   specialty: string | null;
   email: string | null;
   phone: string | null;
+  image_url: string | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -186,7 +188,19 @@ export interface FoodPreferences {
   dislikes: string[];
 }
 
-// Provider Availability Effective table structure from Supabase
+// Provider Availability table structure from Supabase
+export interface ProviderAvailability {
+  id: string;
+  provider_id: string;
+  day_of_week: number; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  start_time: string | null; // time without time zone
+  end_time: string | null; // time without time zone
+  is_in_office: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Provider Availability Effective table structure from Supabase (view)
 export interface ProviderAvailabilityEffective {
   id: string;
   provider_id: string;
@@ -203,6 +217,52 @@ export interface ProviderAvailabilityEffective {
   updated_at: string;
 }
 
+// Dietary Restriction table structure from Supabase
+export interface DietaryRestriction {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Food Category table structure from Supabase
+export interface FoodCategory {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Food Preference Dietary Restriction junction table
+export interface FoodPreferenceDietaryRestriction {
+  id: string;
+  food_preference_id: string;
+  dietary_restriction_id: string;
+  created_at: string;
+}
+
+// Food Preference Disliked Category junction table
+export interface FoodPreferenceDislikedCategory {
+  id: string;
+  food_preference_id: string;
+  food_category_id: string;
+  created_at: string;
+}
+
+// Food Preference Favorite Category junction table
+export interface FoodPreferenceFavoriteCategory {
+  id: string;
+  food_preference_id: string;
+  food_category_id: string;
+  created_at: string;
+}
+
 // Meeting table structure from Supabase (matches meetings table)
 export interface Meeting {
   id: string;
@@ -216,7 +276,7 @@ export interface Meeting {
   description: string | null;
   start_at: string;
   end_at: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  status: 'pending' | 'approved' | 'declined' | 'completed' | 'cancelled';
   auto_approved: boolean;
   approved_by_profile_id: string | null;
   approved_at: string | null;
@@ -317,6 +377,51 @@ export interface Database {
         Row: LocationHours;
         Insert: Omit<LocationHours, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<LocationHours, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      provider_availability: {
+        Row: ProviderAvailability;
+        Insert: Omit<ProviderAvailability, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<ProviderAvailability, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      message_reads: {
+        Row: MessageRead;
+        Insert: Omit<MessageRead, 'read_at'>;
+        Update: Partial<Omit<MessageRead, 'message_id' | 'profile_id'>>;
+      };
+      location_preferred_time_slots: {
+        Row: LocationPreferredTimeSlot;
+        Insert: Omit<LocationPreferredTimeSlot, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<LocationPreferredTimeSlot, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      food_preferences: {
+        Row: FoodPreference;
+        Insert: Omit<FoodPreference, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<FoodPreference, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      food_preferences_dietary_restrictions: {
+        Row: FoodPreferenceDietaryRestriction;
+        Insert: Omit<FoodPreferenceDietaryRestriction, 'id' | 'created_at'>;
+        Update: Partial<Omit<FoodPreferenceDietaryRestriction, 'id' | 'created_at'>>;
+      };
+      food_preferences_disliked_categories: {
+        Row: FoodPreferenceDislikedCategory;
+        Insert: Omit<FoodPreferenceDislikedCategory, 'id' | 'created_at'>;
+        Update: Partial<Omit<FoodPreferenceDislikedCategory, 'id' | 'created_at'>>;
+      };
+      food_preferences_favorite_categories: {
+        Row: FoodPreferenceFavoriteCategory;
+        Insert: Omit<FoodPreferenceFavoriteCategory, 'id' | 'created_at'>;
+        Update: Partial<Omit<FoodPreferenceFavoriteCategory, 'id' | 'created_at'>>;
+      };
+      dietary_restrictions: {
+        Row: DietaryRestriction;
+        Insert: Omit<DietaryRestriction, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<DietaryRestriction, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      food_categories: {
+        Row: FoodCategory;
+        Insert: Omit<FoodCategory, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<FoodCategory, 'id' | 'created_at' | 'updated_at'>>;
       };
     };
   };

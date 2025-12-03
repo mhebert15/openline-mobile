@@ -258,9 +258,9 @@ export default function BookMeetingScreen() {
       const matchesLocation = selectedLocationId
         ? meeting.location_id === selectedLocationId
         : true;
-      // Exclude cancelled and rejected meetings
+      // Exclude cancelled and declined meetings
       const isActive =
-        meeting.status !== "cancelled" && meeting.status !== "rejected";
+        meeting.status !== "cancelled" && meeting.status !== "declined";
       return matchesDate && matchesLocation && isActive;
     });
   }, [meetings, selectedDate, selectedLocationId]);
@@ -302,7 +302,7 @@ export default function BookMeetingScreen() {
               m.start_at
             }, End=${m.end_at}, Location=${m.location_id}`
           );
-          if (m.status === "cancelled" || m.status === "rejected") {
+          if (m.status === "cancelled" || m.status === "declined") {
             console.error(
               `  ❌ ERROR: Meeting ${m.id} has status "${m.status}" but should be excluded!`
             );
@@ -583,10 +583,10 @@ export default function BookMeetingScreen() {
         // Only consider active meetings (exclude cancelled and rejected)
         // Use freshMeetings instead of allDayMeetings to avoid race conditions
         for (const meeting of freshMeetings) {
-          // Skip cancelled or rejected meetings (shouldn't be in query, but double-check)
-          if (meeting.status === "cancelled" || meeting.status === "rejected") {
+          // Skip cancelled or declined meetings (shouldn't be in query, but double-check)
+          if (meeting.status === "cancelled" || meeting.status === "declined") {
             console.log(
-              `Skipping cancelled/rejected meeting: ${meeting.id} (${meeting.status})`
+              `Skipping cancelled/declined meeting: ${meeting.id} (${meeting.status})`
             );
             continue;
           }
