@@ -33,7 +33,7 @@ import {
   BottomSheetContext,
 } from "@/components/ui/bottomsheet";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
-import { setOpenEditSheetFn } from "./edit-sheet-utils";
+import { setOpenEditSheetFn } from "@/lib/utils/edit-sheet-utils";
 
 // Inner component that has access to BottomSheet context
 function ProfileSettingsContent({

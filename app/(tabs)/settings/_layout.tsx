@@ -1,6 +1,6 @@
 import { Stack, useRouter } from "expo-router";
 import { TouchableOpacity, Text } from "react-native";
-import { getOpenEditSheetFn } from "./edit-sheet-utils";
+import { getOpenEditSheetFn } from "@/lib/utils/edit-sheet-utils";
 
 export default function SettingsLayout() {
   const router = useRouter();

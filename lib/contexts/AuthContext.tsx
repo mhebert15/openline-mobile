@@ -57,9 +57,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setSupabaseUser(session?.user ?? null);
       if (session?.user) {
-        // Don't set loading to true for profile updates - only show loading on initial load
-        // This prevents flickering when the profile is reloaded
-        loadUserProfileSilently(session.user);
+        // Only reload profile for meaningful events, not token refreshes
+        // TOKEN_REFRESHED doesn't indicate profile data changed, only the auth token
+        if (_event === "SIGNED_IN" || _event === "USER_UPDATED") {
+          // Don't set loading to true for profile updates - only show loading on initial load
+          // This prevents flickering when the profile is reloaded
+          loadUserProfileSilently(session.user);
+        }
       } else {
         setProfile(null);
         setUser(null);
