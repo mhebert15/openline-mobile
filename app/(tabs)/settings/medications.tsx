@@ -137,7 +137,6 @@ function MedicationsScreen() {
           `
         )
         .eq("medical_rep_id", medicalRepId)
-        .eq("is_active", true)
         .order("created_at", { ascending: false });
 
       if (medicationsError) {
@@ -513,7 +512,7 @@ function MedicationsScreen() {
             try {
               const { error } = await supabase
                 .from("medical_rep_medications")
-                .update({ is_active: false } as never)
+                .delete()
                 .eq("id", medication.id);
 
               if (error) {
