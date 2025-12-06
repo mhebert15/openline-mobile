@@ -15,6 +15,7 @@ import {
   ShieldIcon,
   HelpCircleIcon,
   LogOutIcon,
+  Pill,
 } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 
@@ -74,6 +75,13 @@ function SettingsScreen() {
           title="Profile Settings"
           onPress={() => router.push("/(tabs)/settings/profile-settings")}
         />
+        {user?.user_type === "medical_rep" && (
+          <SettingsItem
+            icon={<Pill size={24} color="#6b7280" />}
+            title="Medications"
+            onPress={() => router.push("/(tabs)/settings/medications")}
+          />
+        )}
         <SettingsItem
           icon={<BellIcon size={24} color="#6b7280" />}
           title="Notification Settings"

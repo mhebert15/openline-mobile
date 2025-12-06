@@ -1,6 +1,7 @@
 import { Stack, useRouter } from "expo-router";
 import { TouchableOpacity, Text } from "react-native";
 import { getOpenEditSheetFn } from "@/lib/utils/edit-sheet-utils";
+import { getOpenAddMedicationSheetFn } from "@/lib/utils/add-medication-sheet-utils";
 
 export default function SettingsLayout() {
   const router = useRouter();
@@ -75,6 +76,35 @@ export default function SettingsLayout() {
         name="help-support"
         options={{
           headerTitle: "Help & Support",
+        }}
+      />
+      <Stack.Screen
+        name="medications"
+        options={{
+          headerTitle: "Medications",
+          headerRight: () => (
+            <TouchableOpacity
+              style={{ padding: 8 }}
+              onPress={() => {
+                const openFn = getOpenAddMedicationSheetFn();
+                if (openFn) {
+                  openFn();
+                } else {
+                  router.setParams({ openAdd: "true" });
+                }
+              }}
+            >
+              <Text
+                style={{
+                  color: "#0086c9",
+                  fontWeight: "600",
+                  fontSize: 16,
+                }}
+              >
+                Add
+              </Text>
+            </TouchableOpacity>
+          ),
         }}
       />
     </Stack>

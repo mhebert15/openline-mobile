@@ -263,6 +263,69 @@ export interface FoodPreferenceFavoriteCategory {
   created_at: string;
 }
 
+// Medication table structure from Supabase
+export interface Medication {
+  id: string;
+  brand_name: string;
+  generic_name: string | null;
+  manufacturer: string | null;
+  therapeutic_class: string | null;
+  route: string | null;
+  form: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Medication Dosage table structure from Supabase
+export interface MedicationDosage {
+  id: string;
+  medication_id: string;
+  strength_text: string;
+  form: string | null;
+  package_size: string | null;
+  ndc_code: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Medical Rep Medication junction table
+export interface MedicalRepMedication {
+  id: string;
+  medical_rep_id: string;
+  medication_dosage_id: string;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Combined medication info for UI display
+export interface MedicalRepMedicationDisplay {
+  id: string;
+  medical_rep_id: string;
+  medication_dosage_id: string;
+  notes: string | null;
+  is_active: boolean;
+  medication: {
+    id: string;
+    brand_name: string;
+    generic_name: string | null;
+    manufacturer: string | null;
+    therapeutic_class: string | null;
+    route: string | null;
+    form: string | null;
+  };
+  dosage: {
+    id: string;
+    strength_text: string;
+    form: string | null;
+    package_size: string | null;
+    ndc_code: string | null;
+  };
+}
+
 // Meeting table structure from Supabase (matches meetings table)
 export interface Meeting {
   id: string;
@@ -422,6 +485,21 @@ export interface Database {
         Row: FoodCategory;
         Insert: Omit<FoodCategory, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<FoodCategory, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      medications: {
+        Row: Medication;
+        Insert: Omit<Medication, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Medication, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      medication_dosages: {
+        Row: MedicationDosage;
+        Insert: Omit<MedicationDosage, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<MedicationDosage, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      medical_rep_medications: {
+        Row: MedicalRepMedication;
+        Insert: Omit<MedicalRepMedication, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<MedicalRepMedication, 'id' | 'created_at' | 'updated_at'>>;
       };
     };
   };
