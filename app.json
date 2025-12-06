@@ -82,9 +82,9 @@
     ],
     "notification": {
       "icon": "./assets/images/icon.png",
-      "color": "#0066CC",
+      "color": "#0086c9",
       "androidMode": "default",
-      "androidCollapsedTitle": "New message from {{participant}}"
+      "androidCollapsedTitle": "{{notificationTitle}}"
     },
     "experiments": {
       "typedRoutes": true

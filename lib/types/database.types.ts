@@ -370,6 +370,46 @@ export interface MessageRead {
   read_at: string;
 }
 
+// Notification types enum
+export type NotificationType =
+  | "meeting_approved"
+  | "meeting_declined"
+  | "location_invited"
+  | "medication_requested"
+  | "medication_cancelled";
+
+// Notification metadata structure
+export interface NotificationMetadata {
+  meeting_id?: string;
+  location_id?: string;
+  location_name?: string;
+  medication_request_id?: string;
+  medication_name?: string;
+}
+
+// Notification table structure from Supabase (matches notifications table)
+export interface Notification {
+  id: string;
+  recipient_profile_id: string;
+  notification_type: NotificationType;
+  title: string;
+  body: string;
+  metadata: NotificationMetadata | null;
+  read_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// UserPushToken table structure from Supabase (matches user_push_tokens table)
+export interface UserPushToken {
+  id: string;
+  profile_id: string;
+  expo_push_token: string;
+  device_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TimeSlot {
   time: string;
   available: boolean;
@@ -497,6 +537,16 @@ export interface Database {
         Row: MedicalRepMedication;
         Insert: Omit<MedicalRepMedication, 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Omit<MedicalRepMedication, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      notifications: {
+        Row: Notification;
+        Insert: Omit<Notification, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Notification, 'id' | 'created_at' | 'updated_at'>>;
+      };
+      user_push_tokens: {
+        Row: UserPushToken;
+        Insert: Omit<UserPushToken, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<UserPushToken, 'id' | 'created_at' | 'updated_at'>>;
       };
     };
   };

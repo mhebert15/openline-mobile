@@ -281,6 +281,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     try {
+      // Clean up push token before signing out
+      if (profile?.id) {
+        try {
+          const { deletePushToken } = await import(
+            "@/lib/services/push-notifications"
+          );
+          await deletePushToken(profile.id);
+        } catch (error) {
+          console.error("Error deleting push token on sign out:", error);
+        }
+      }
+
       await supabase.auth.signOut();
       setProfile(null);
       setUser(null);

@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabAnimationProvider } from "@/components/TabAnimationContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { useAuth } from "@/lib/contexts/AuthContext";
+import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { supabase } from "@/lib/supabase/client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -94,6 +95,15 @@ const LargeHitTabButton: React.FC<TabButtonProps> = ({
 
 function TabsContent() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  // Get unread count from NotificationContext (will be 0 if context not available)
+  let unreadCount = 0;
+  try {
+    const notifications = useNotifications();
+    unreadCount = notifications.unreadCount;
+  } catch {
+    // Context not available yet, will be 0
+  }
   const tabBarHeight =
     Platform.select({
       ios: 48 + insets.bottom,
@@ -102,7 +112,6 @@ function TabsContent() {
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const sheetHeight = Dimensions.get("window").height * 0.9;
-  const { user } = useAuth();
   const { cache, prefetchTabData } = useDataCache();
   const [showComposeSheet, setShowComposeSheet] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState("");
@@ -559,7 +568,37 @@ function TabsContent() {
                 <LargeHitTabButton {...props} tabRouteSegment="notifications" />
               ),
               tabBarIcon: ({ color, size }) => (
-                <BellIcon color={color} size={size} />
+                <View style={{ position: "relative" }}>
+                  <BellIcon color={color} size={size} />
+                  {unreadCount > 0 && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: -4,
+                        right: -4,
+                        backgroundColor: "#ef4444",
+                        borderRadius: 10,
+                        minWidth: 20,
+                        height: 20,
+                        paddingHorizontal: 6,
+                        justifyContent: "center",
+                        alignItems: "center",
+                        borderWidth: 2,
+                        borderColor: "#ffffff",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: "#ffffff",
+                          fontSize: 11,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               ),
             }}
           />

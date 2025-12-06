@@ -10,10 +10,18 @@ import {
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { AuthProvider, useAuth } from "@/lib/contexts/AuthContext";
 import { DataCacheProvider } from "@/lib/contexts/DataCacheContext";
+import { NotificationProvider } from "@/lib/contexts/NotificationContext";
+import {
+  registerForPushNotifications,
+  savePushToken,
+  deletePushToken,
+  getDeviceId,
+} from "@/lib/services/push-notifications";
+import * as Notifications from "expo-notifications";
 import { View, ActivityIndicator } from "react-native";
 
 export {
@@ -56,6 +64,75 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const notificationListener = useRef<Notifications.Subscription | undefined>(
+    undefined
+  );
+  const responseListener = useRef<Notifications.Subscription | undefined>(
+    undefined
+  );
+
+  // Register for push notifications when user logs in
+  useEffect(() => {
+    if (!user || loading) return;
+
+    const registerPushToken = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          const deviceId = await getDeviceId();
+          await savePushToken(user.id, token, deviceId);
+        }
+      } catch (error) {
+        console.error("Error registering push token:", error);
+      }
+    };
+
+    registerPushToken();
+  }, [user, loading]);
+
+  // Clean up push token when user logs out
+  useEffect(() => {
+    if (user) return; // User is logged in, don't clean up
+
+    // User logged out, clean up push token
+    const cleanup = async () => {
+      // Note: We can't get the user ID here since user is null
+      // Token cleanup is handled in AuthContext signOut
+    };
+    cleanup();
+  }, [user]);
+
+  // Handle notification received (foreground/background)
+  useEffect(() => {
+    notificationListener.current =
+      Notifications.addNotificationReceivedListener((notification) => {
+        // Notification received while app is in foreground
+        // The notification handler in push-notifications.ts will show it
+        console.log("Notification received:", notification);
+      });
+
+    // Handle notification tapped
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const data = response.notification.request.content.data;
+        // Navigate based on notification data
+        if (data?.screen && data?.id) {
+          if (data.screen === "meeting-detail") {
+            router.push(`/(tabs)/(dashboard)/meeting-detail?id=${data.id}`);
+          } else if (data.screen === "location-detail") {
+            router.push(`/(tabs)/locations/location-detail?id=${data.id}`);
+          }
+        } else {
+          // Default: navigate to notifications tab
+          router.push("/(tabs)/notifications");
+        }
+      });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, [router]);
 
   useEffect(() => {
     if (loading) return;
@@ -88,7 +165,9 @@ function RootLayoutNav() {
     <GluestackUIProvider mode={colorMode}>
       <ThemeProvider value={colorMode === "dark" ? DarkTheme : DefaultTheme}>
         <DataCacheProvider>
-          <Slot />
+          <NotificationProvider profileId={user?.id || null}>
+            <Slot />
+          </NotificationProvider>
         </DataCacheProvider>
       </ThemeProvider>
     </GluestackUIProvider>
