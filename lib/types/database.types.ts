@@ -285,7 +285,6 @@ export interface MedicationDosage {
   form: string | null;
   package_size: string | null;
   ndc_code: string | null;
-  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -296,7 +295,6 @@ export interface MedicalRepMedication {
   medical_rep_id: string;
   medication_dosage_id: string;
   notes: string | null;
-  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -307,7 +305,6 @@ export interface MedicalRepMedicationDisplay {
   medical_rep_id: string;
   medication_dosage_id: string;
   notes: string | null;
-  is_active: boolean;
   medication: {
     id: string;
     brand_name: string;

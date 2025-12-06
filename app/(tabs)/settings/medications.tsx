@@ -21,7 +21,7 @@ import {
   ToastDescription,
 } from "@/components/ui/toast";
 import { BottomSheet } from "@/components/ui/bottomsheet";
-import { X, Trash2, Edit2 } from "lucide-react-native";
+import { X, Trash2 } from "lucide-react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { setOpenAddMedicationSheetFn } from "@/lib/utils/add-medication-sheet-utils";
 
@@ -61,8 +61,9 @@ function MedicationsScreen() {
   >([]);
   const [loadingMasterMedications, setLoadingMasterMedications] =
     useState(false);
-  const [selectedMedicationDosage, setSelectedMedicationDosage] =
-    useState<MedicationOption | null>(null);
+  const [selectedMedicationDosages, setSelectedMedicationDosages] = useState<
+    MedicationOption[]
+  >([]);
   const [addNotes, setAddNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [addingMedication, setAddingMedication] = useState(false);
@@ -77,7 +78,7 @@ function MedicationsScreen() {
   };
   const handleAddClose = () => {
     setIsAddModalOpen(false);
-    setSelectedMedicationDosage(null);
+    setSelectedMedicationDosages([]);
     setAddNotes("");
     setSearchQuery("");
   };
@@ -117,7 +118,6 @@ function MedicationsScreen() {
             medical_rep_id,
             medication_dosage_id,
             notes,
-            is_active,
             medication_dosages (
               id,
               strength_text,
@@ -324,7 +324,7 @@ function MedicationsScreen() {
 
   // Handle adding medication
   const handleAddMedication = async () => {
-    if (!selectedMedicationDosage || !user) {
+    if (!user || selectedMedicationDosages.length === 0) {
       return;
     }
 
@@ -345,16 +345,24 @@ function MedicationsScreen() {
 
       const medicalRepId = (medicalRep as { id: string }).id;
 
-      // Check if this medication dosage is already associated
-      const { data: existing } = await supabase
+      // Check for existing medications
+      const dosageIds = selectedMedicationDosages.map((med) => med.dosage_id);
+      const { data: existingMedications } = await supabase
         .from("medical_rep_medications")
-        .select("id")
+        .select("medication_dosage_id")
         .eq("medical_rep_id", medicalRepId)
-        .eq("medication_dosage_id", selectedMedicationDosage.dosage_id)
-        .eq("is_active", true)
-        .maybeSingle();
+        .in("medication_dosage_id", dosageIds);
 
-      if (existing) {
+      const existingDosageIds = new Set(
+        (existingMedications || []).map((m: any) => m.medication_dosage_id)
+      );
+
+      // Filter out medications that already exist
+      const medicationsToAdd = selectedMedicationDosages.filter(
+        (med) => !existingDosageIds.has(med.dosage_id)
+      );
+
+      if (medicationsToAdd.length === 0) {
         toast.show({
           placement: "top",
           render: ({ id }) => {
@@ -362,7 +370,7 @@ function MedicationsScreen() {
               <Toast nativeID={`toast-${id}`} action="error" variant="solid">
                 <ToastTitle>Already Added</ToastTitle>
                 <ToastDescription>
-                  This medication is already in your list.
+                  All selected medications are already in your list.
                 </ToastDescription>
               </Toast>
             );
@@ -372,27 +380,43 @@ function MedicationsScreen() {
         return;
       }
 
-      // Add the medication
-      const { error } = await supabase.from("medical_rep_medications").insert({
+      // Add all medications at once
+      const medicationsToInsert = medicationsToAdd.map((med) => ({
         medical_rep_id: medicalRepId,
-        medication_dosage_id: selectedMedicationDosage.dosage_id,
+        medication_dosage_id: med.dosage_id,
         notes: addNotes || null,
-        is_active: true,
-      } as never);
+      }));
+
+      const { error } = await supabase
+        .from("medical_rep_medications")
+        .insert(medicationsToInsert as never);
 
       if (error) {
         throw error;
       }
 
+      const skippedCount =
+        selectedMedicationDosages.length - medicationsToAdd.length;
       toast.show({
         placement: "top",
         render: ({ id }) => {
           return (
             <Toast nativeID={`toast-${id}`} action="success" variant="solid">
-              <ToastTitle>Medication Added</ToastTitle>
+              <ToastTitle>
+                {medicationsToAdd.length === 1
+                  ? "Medication Added"
+                  : `${medicationsToAdd.length} Medications Added`}
+              </ToastTitle>
               <ToastDescription>
-                {selectedMedicationDosage.brand_name} has been added to your
-                list.
+                {medicationsToAdd.length === 1
+                  ? `${medicationsToAdd[0].brand_name} has been added to your list.`
+                  : `${medicationsToAdd.length} medication${
+                      medicationsToAdd.length > 1 ? "s" : ""
+                    } have been added to your list.${
+                      skippedCount > 0
+                        ? ` ${skippedCount} were already in your list.`
+                        : ""
+                    }`}
               </ToastDescription>
             </Toast>
           );
@@ -402,7 +426,7 @@ function MedicationsScreen() {
       handleAddClose();
       await fetchMedications();
     } catch (error: any) {
-      console.error("Error adding medication:", error);
+      console.error("Error adding medications:", error);
       toast.show({
         placement: "top",
         render: ({ id }) => {
@@ -410,7 +434,8 @@ function MedicationsScreen() {
             <Toast nativeID={`toast-${id}`} action="error" variant="solid">
               <ToastTitle>Add Failed</ToastTitle>
               <ToastDescription>
-                {error.message || "Failed to add medication. Please try again."}
+                {error.message ||
+                  "Failed to add medications. Please try again."}
               </ToastDescription>
             </Toast>
           );
@@ -703,27 +728,14 @@ function MedicationsScreen() {
                           </Text>
                         )}
                       </View>
-                      <View
-                        className="flex-row gap-2 ml-2"
-                        style={{ flexShrink: 0 }}
+                      <TouchableOpacity
+                        onPress={() => handleDelete(med)}
+                        style={{ padding: 8 }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.7}
                       >
-                        <TouchableOpacity
-                          onPress={() => handleEdit(med)}
-                          style={{ padding: 8 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          activeOpacity={0.7}
-                        >
-                          <Edit2 size={18} color="#0086c9" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleDelete(med)}
-                          style={{ padding: 8 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          activeOpacity={0.7}
-                        >
-                          <Trash2 size={18} color="#ef4444" />
-                        </TouchableOpacity>
-                      </View>
+                        <Trash2 size={18} color="#ef4444" />
+                      </TouchableOpacity>
                     </View>
                     <View className="mt-2">
                       {med.dosage.strength_text && (
@@ -757,6 +769,19 @@ function MedicationsScreen() {
                         </Text>
                       )}
                     </View>
+                    {/* Edit Button */}
+                    <TouchableOpacity
+                      onPress={() => handleEdit(med)}
+                      className="mt-4 py-3 px-4 bg-blue-50 border border-blue-200 rounded-lg"
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        className="text-center text-blue-700 font-semibold"
+                        style={{ fontSize: 16 }}
+                      >
+                        Edit
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
@@ -795,7 +820,7 @@ function MedicationsScreen() {
                           fontSize: 16,
                         }}
                       >
-                        Save
+                        Update
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -943,8 +968,8 @@ function MedicationsScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
           <AddMedicationModalContent
             onClose={handleAddClose}
-            selectedMedicationDosage={selectedMedicationDosage}
-            setSelectedMedicationDosage={setSelectedMedicationDosage}
+            selectedMedicationDosages={selectedMedicationDosages}
+            setSelectedMedicationDosages={setSelectedMedicationDosages}
             addNotes={addNotes}
             setAddNotes={setAddNotes}
             searchQuery={searchQuery}
@@ -964,8 +989,8 @@ function MedicationsScreen() {
 // Add Medication Modal Content
 function AddMedicationModalContent({
   onClose,
-  selectedMedicationDosage,
-  setSelectedMedicationDosage,
+  selectedMedicationDosages,
+  setSelectedMedicationDosages,
   addNotes,
   setAddNotes,
   searchQuery,
@@ -977,8 +1002,8 @@ function AddMedicationModalContent({
   fetchMasterMedications,
 }: {
   onClose: () => void;
-  selectedMedicationDosage: MedicationOption | null;
-  setSelectedMedicationDosage: (med: MedicationOption | null) => void;
+  selectedMedicationDosages: MedicationOption[];
+  setSelectedMedicationDosages: (meds: MedicationOption[]) => void;
   addNotes: string;
   setAddNotes: (notes: string) => void;
   searchQuery: string;
@@ -993,6 +1018,24 @@ function AddMedicationModalContent({
     fetchMasterMedications();
   }, []);
 
+  const toggleMedicationSelection = (med: MedicationOption) => {
+    const isSelected = selectedMedicationDosages.some(
+      (selected) => selected.dosage_id === med.dosage_id
+    );
+
+    if (isSelected) {
+      // Remove from selection
+      setSelectedMedicationDosages(
+        selectedMedicationDosages.filter(
+          (selected) => selected.dosage_id !== med.dosage_id
+        )
+      );
+    } else {
+      // Add to selection
+      setSelectedMedicationDosages([...selectedMedicationDosages, med]);
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
       {/* Fixed Header */}
@@ -1002,10 +1045,12 @@ function AddMedicationModalContent({
         </TouchableOpacity>
         <Text className="text-lg font-semibold text-gray-900">
           Add Medication
+          {selectedMedicationDosages.length > 0 &&
+            ` (${selectedMedicationDosages.length})`}
         </Text>
         <TouchableOpacity
           onPress={handleAddMedication}
-          disabled={!selectedMedicationDosage || addingMedication}
+          disabled={selectedMedicationDosages.length === 0 || addingMedication}
           className="p-2"
         >
           {addingMedication ? (
@@ -1013,12 +1058,15 @@ function AddMedicationModalContent({
           ) : (
             <Text
               style={{
-                color: selectedMedicationDosage ? "#0086c9" : "#9CA3AF",
+                color:
+                  selectedMedicationDosages.length > 0 ? "#0086c9" : "#9CA3AF",
                 fontWeight: "600",
                 fontSize: 16,
               }}
             >
               Add
+              {selectedMedicationDosages.length > 0 &&
+                ` (${selectedMedicationDosages.length})`}
             </Text>
           )}
         </TouchableOpacity>
@@ -1064,12 +1112,13 @@ function AddMedicationModalContent({
         ) : (
           <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
             {filteredMedications.map((med, index) => {
-              const isSelected =
-                selectedMedicationDosage?.dosage_id === med.dosage_id;
+              const isSelected = selectedMedicationDosages.some(
+                (selected) => selected.dosage_id === med.dosage_id
+              );
               return (
                 <TouchableOpacity
                   key={`${med.medication_id}-${med.dosage_id}-${index}`}
-                  onPress={() => setSelectedMedicationDosage(med)}
+                  onPress={() => toggleMedicationSelection(med)}
                   className={`border rounded-lg p-4 mb-3 ${
                     isSelected
                       ? "border-blue-500 bg-blue-50"
@@ -1132,15 +1181,15 @@ function AddMedicationModalContent({
       </ScrollView>
 
       {/* Fixed Notes Section */}
-      {selectedMedicationDosage && (
+      {selectedMedicationDosages.length > 0 && (
         <View className="px-4 py-4 border-t border-gray-200 bg-white">
           <Text className="text-sm font-semibold text-gray-700 mb-2">
-            Notes (Optional)
+            Notes (Optional - applies to all selected medications)
           </Text>
           <TextInput
             value={addNotes}
             onChangeText={setAddNotes}
-            placeholder="Add notes about this medication..."
+            placeholder="Add notes about these medications..."
             multiline
             numberOfLines={3}
             className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
