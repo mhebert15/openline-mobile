@@ -87,11 +87,11 @@ function SettingsScreen() {
           title="Notification Settings"
           onPress={() => router.push("/(tabs)/settings/notification-settings")}
         />
-        <SettingsItem
+        {/* <SettingsItem
           icon={<ShieldIcon size={24} color="#6b7280" />}
           title="Privacy & Security"
           onPress={() => router.push("/(tabs)/settings/privacy-security")}
-        />
+        /> */}
       </View>
 
       {/* Support Section */}

@@ -23,6 +23,7 @@ import {
 } from "@/lib/services/push-notifications";
 import * as Notifications from "expo-notifications";
 import { View, ActivityIndicator } from "react-native";
+import { isDevelopmentBuild } from "@/lib/utils/environment";
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -71,9 +72,17 @@ function RootLayoutNav() {
     undefined
   );
 
-  // Register for push notifications when user logs in
+  // Register for push notifications when user logs in (only in development builds)
   useEffect(() => {
     if (!user || loading) return;
+
+    // Only register push tokens in development builds
+    if (!isDevelopmentBuild()) {
+      console.log(
+        "Push notifications disabled: Running in Expo Go. Use a development build to enable push notifications."
+      );
+      return;
+    }
 
     const registerPushToken = async () => {
       try {
@@ -102,8 +111,14 @@ function RootLayoutNav() {
     cleanup();
   }, [user]);
 
-  // Handle notification received (foreground/background)
+  // Handle notification received (foreground/background) - only in development builds
   useEffect(() => {
+    // Only set up push notification listeners in development builds
+    // In Expo Go, in-app notifications still work via Supabase Realtime
+    if (!isDevelopmentBuild()) {
+      return;
+    }
+
     notificationListener.current =
       Notifications.addNotificationReceivedListener((notification) => {
         // Notification received while app is in foreground

@@ -2,6 +2,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { supabase } from "@/lib/supabase/client";
 import * as Device from "expo-device";
+import { isDevelopmentBuild } from "@/lib/utils/environment";
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -16,10 +17,19 @@ Notifications.setNotificationHandler({
 
 /**
  * Request notification permissions and get Expo push token
+ * Note: Push notifications are only available in development builds, not Expo Go
  */
 export async function registerForPushNotifications(): Promise<
   string | null
 > {
+  // Check if running in development build (not Expo Go)
+  if (!isDevelopmentBuild()) {
+    console.log(
+      "Push notifications are not available in Expo Go. Please use a development build to test push notifications."
+    );
+    return null;
+  }
+
   let token: string | null = null;
 
   if (Platform.OS === "android") {

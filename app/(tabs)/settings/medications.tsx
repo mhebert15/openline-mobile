@@ -20,7 +20,6 @@ import {
   ToastTitle,
   ToastDescription,
 } from "@/components/ui/toast";
-import { BottomSheet } from "@/components/ui/bottomsheet";
 import { X, Trash2 } from "lucide-react-native";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { setOpenAddMedicationSheetFn } from "@/lib/utils/add-medication-sheet-utils";
@@ -694,269 +693,265 @@ function MedicationsScreen() {
 
   return (
     <>
-      <BottomSheet>
-        <AnimatedTabScreen>
-          <ScrollView className="flex-1 bg-gray-50">
-            {loadingMedications ? (
-              <View className="flex-1 items-center justify-center py-12">
-                <ActivityIndicator size="large" color="#0086c9" />
-              </View>
-            ) : medications.length === 0 ? (
-              <View className="bg-white p-6 mb-2">
-                <Text className="text-base text-gray-600 text-center">
-                  No medications listed
-                </Text>
-              </View>
-            ) : (
-              <View className="bg-white p-6 mb-2">
-                {medications.map((med, index) => (
-                  <View
-                    key={med.id}
-                    className="border border-gray-200 rounded-lg p-4"
-                    style={{
-                      marginBottom: index < medications.length - 1 ? 16 : 0,
-                    }}
-                  >
-                    <View className="flex-row justify-between items-start mb-2">
-                      <View className="flex-1" style={{ flexShrink: 1 }}>
-                        <Text className="text-base font-semibold text-gray-900">
-                          {med.medication.brand_name}
-                        </Text>
-                        {med.medication.generic_name && (
-                          <Text className="text-sm text-gray-600 mt-1">
-                            {med.medication.generic_name}
-                          </Text>
-                        )}
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => handleDelete(med)}
-                        style={{ padding: 8 }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        activeOpacity={0.7}
-                      >
-                        <Trash2 size={18} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                    <View className="mt-2">
-                      {med.dosage.strength_text && (
-                        <Text className="text-sm text-gray-600 mb-1">
-                          <Text className="font-medium">Strength: </Text>
-                          {med.dosage.strength_text}
-                          {med.dosage.form && ` (${med.dosage.form})`}
-                        </Text>
-                      )}
-                      {med.medication.manufacturer && (
-                        <Text className="text-sm text-gray-600 mb-1">
-                          <Text className="font-medium">Manufacturer: </Text>
-                          {med.medication.manufacturer}
-                        </Text>
-                      )}
-                      {med.medication.therapeutic_class && (
-                        <Text className="text-sm text-gray-600 mb-1">
-                          <Text className="font-medium">Class: </Text>
-                          {med.medication.therapeutic_class}
-                        </Text>
-                      )}
-                      {med.dosage.package_size && (
-                        <Text className="text-sm text-gray-600 mb-1">
-                          <Text className="font-medium">Package: </Text>
-                          {med.dosage.package_size}
-                        </Text>
-                      )}
-                      {med.notes && (
-                        <Text className="text-sm text-gray-600 mt-2 italic">
-                          {med.notes}
+      <AnimatedTabScreen>
+        <ScrollView className="flex-1 bg-gray-50">
+          {loadingMedications ? (
+            <View className="flex-1 items-center justify-center py-12">
+              <ActivityIndicator size="large" color="#0086c9" />
+            </View>
+          ) : medications.length === 0 ? (
+            <View className="bg-white p-6 mb-2">
+              <Text className="text-base text-gray-600 text-center">
+                No medications listed
+              </Text>
+            </View>
+          ) : (
+            <View className="bg-white p-6 mb-2">
+              {medications.map((med, index) => (
+                <View
+                  key={med.id}
+                  className="border border-gray-200 rounded-lg p-4"
+                  style={{
+                    marginBottom: index < medications.length - 1 ? 16 : 0,
+                  }}
+                >
+                  <View className="flex-row justify-between items-start mb-2">
+                    <View className="flex-1" style={{ flexShrink: 1 }}>
+                      <Text className="text-base font-semibold text-gray-900">
+                        {med.medication.brand_name}
+                      </Text>
+                      {med.medication.generic_name && (
+                        <Text className="text-sm text-gray-600 mt-1">
+                          {med.medication.generic_name}
                         </Text>
                       )}
                     </View>
-                    {/* Edit Button */}
                     <TouchableOpacity
-                      onPress={() => handleEdit(med)}
-                      className="mt-4 py-3 px-4 bg-blue-50 border border-blue-200 rounded-lg"
+                      onPress={() => handleDelete(med)}
+                      style={{ padding: 8 }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       activeOpacity={0.7}
                     >
-                      <Text
-                        className="text-center text-blue-700 font-semibold"
-                        style={{ fontSize: 16 }}
-                      >
-                        Edit
-                      </Text>
+                      <Trash2 size={18} color="#ef4444" />
                     </TouchableOpacity>
                   </View>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Edit Medication Modal */}
-          <Modal
-            visible={!!editingMedication}
-            animationType="slide"
-            presentationStyle="pageSheet"
-            onRequestClose={handleEditClose}
-          >
-            <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
-              <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
-                {/* Header */}
-                <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
-                  <TouchableOpacity onPress={handleEditClose} className="p-2">
-                    <X size={24} color="#111827" />
-                  </TouchableOpacity>
-                  <Text className="text-lg font-semibold text-gray-900">
-                    Edit Medication
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleSaveEdit}
-                    disabled={saving}
-                    className="p-2"
-                  >
-                    {saving ? (
-                      <ActivityIndicator size="small" color="#0086c9" />
-                    ) : (
-                      <Text
-                        style={{
-                          color: "#0086c9",
-                          fontWeight: "600",
-                          fontSize: 16,
-                        }}
-                      >
-                        Update
+                  <View className="mt-2">
+                    {med.dosage.strength_text && (
+                      <Text className="text-sm text-gray-600 mb-1">
+                        <Text className="font-medium">Strength: </Text>
+                        {med.dosage.strength_text}
+                        {med.dosage.form && ` (${med.dosage.form})`}
                       </Text>
                     )}
+                    {med.medication.manufacturer && (
+                      <Text className="text-sm text-gray-600 mb-1">
+                        <Text className="font-medium">Manufacturer: </Text>
+                        {med.medication.manufacturer}
+                      </Text>
+                    )}
+                    {med.medication.therapeutic_class && (
+                      <Text className="text-sm text-gray-600 mb-1">
+                        <Text className="font-medium">Class: </Text>
+                        {med.medication.therapeutic_class}
+                      </Text>
+                    )}
+                    {med.dosage.package_size && (
+                      <Text className="text-sm text-gray-600 mb-1">
+                        <Text className="font-medium">Package: </Text>
+                        {med.dosage.package_size}
+                      </Text>
+                    )}
+                    {med.notes && (
+                      <Text className="text-sm text-gray-600 mt-2 italic">
+                        {med.notes}
+                      </Text>
+                    )}
+                  </View>
+                  {/* Edit Button */}
+                  <TouchableOpacity
+                    onPress={() => handleEdit(med)}
+                    className="mt-4 py-3 px-4 bg-blue-50 border border-blue-200 rounded-lg"
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      className="text-center text-blue-700 font-semibold"
+                      style={{ fontSize: 16 }}
+                    >
+                      Edit
+                    </Text>
                   </TouchableOpacity>
                 </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
 
-                {/* Content */}
-                {editingMedication && (
-                  <ScrollView className="flex-1">
-                    <View className="px-4 py-6">
-                      <Text className="text-lg font-semibold text-gray-900 mb-2">
-                        {editingMedication.medication.brand_name}
+        {/* Edit Medication Modal */}
+        <Modal
+          visible={!!editingMedication}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleEditClose}
+        >
+          <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
+            <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+              {/* Header */}
+              <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
+                <TouchableOpacity onPress={handleEditClose} className="p-2">
+                  <X size={24} color="#111827" />
+                </TouchableOpacity>
+                <Text className="text-lg font-semibold text-gray-900">
+                  Edit Medication
+                </Text>
+                <TouchableOpacity
+                  onPress={handleSaveEdit}
+                  disabled={saving}
+                  className="p-2"
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#0086c9" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: "#0086c9",
+                        fontWeight: "600",
+                        fontSize: 16,
+                      }}
+                    >
+                      Update
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Content */}
+              {editingMedication && (
+                <ScrollView className="flex-1">
+                  <View className="px-4 py-6">
+                    <Text className="text-lg font-semibold text-gray-900 mb-2">
+                      {editingMedication.medication.brand_name}
+                    </Text>
+                    {editingMedication.medication.generic_name && (
+                      <Text className="text-sm text-gray-600 mb-4">
+                        {editingMedication.medication.generic_name}
                       </Text>
-                      {editingMedication.medication.generic_name && (
-                        <Text className="text-sm text-gray-600 mb-4">
-                          {editingMedication.medication.generic_name}
-                        </Text>
-                      )}
+                    )}
 
-                      {/* Dosage Selection */}
-                      <View className="mb-6">
-                        <Text className="text-sm font-semibold text-gray-700 mb-2">
-                          Strength & Package
+                    {/* Dosage Selection */}
+                    <View className="mb-6">
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">
+                        Strength & Package
+                      </Text>
+                      {loadingEditDosages ? (
+                        <View className="py-4">
+                          <ActivityIndicator size="small" color="#0086c9" />
+                        </View>
+                      ) : editAvailableDosages.length === 0 ? (
+                        <Text className="text-sm text-gray-500">
+                          No other dosages available
                         </Text>
-                        {loadingEditDosages ? (
-                          <View className="py-4">
-                            <ActivityIndicator size="small" color="#0086c9" />
-                          </View>
-                        ) : editAvailableDosages.length === 0 ? (
-                          <Text className="text-sm text-gray-500">
-                            No other dosages available
-                          </Text>
-                        ) : (
-                          <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            className="mb-2"
-                          >
-                            <View className="flex-row gap-2">
-                              {editAvailableDosages.map((dosage) => {
-                                const isSelected =
-                                  selectedEditDosage?.dosage_id ===
-                                  dosage.dosage_id;
-                                return (
-                                  <TouchableOpacity
-                                    key={dosage.dosage_id}
-                                    onPress={() =>
-                                      setSelectedEditDosage(dosage)
-                                    }
-                                    className={`border rounded-lg p-3 ${
-                                      isSelected
-                                        ? "border-blue-500 bg-blue-50"
-                                        : "border-gray-200 bg-white"
-                                    }`}
-                                    style={{ minWidth: 120 }}
-                                  >
-                                    <View>
+                      ) : (
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          className="mb-2"
+                        >
+                          <View className="flex-row gap-2">
+                            {editAvailableDosages.map((dosage) => {
+                              const isSelected =
+                                selectedEditDosage?.dosage_id ===
+                                dosage.dosage_id;
+                              return (
+                                <TouchableOpacity
+                                  key={dosage.dosage_id}
+                                  onPress={() => setSelectedEditDosage(dosage)}
+                                  className={`border rounded-lg p-3 ${
+                                    isSelected
+                                      ? "border-blue-500 bg-blue-50"
+                                      : "border-gray-200 bg-white"
+                                  }`}
+                                  style={{ minWidth: 120 }}
+                                >
+                                  <View>
+                                    <Text
+                                      className={`text-sm font-medium ${
+                                        isSelected
+                                          ? "text-blue-900"
+                                          : "text-gray-900"
+                                      }`}
+                                    >
+                                      {dosage.strength_text}
+                                      {dosage.form && ` (${dosage.form})`}
+                                    </Text>
+                                    {dosage.package_size && (
                                       <Text
-                                        className={`text-sm font-medium ${
+                                        className={`text-xs mt-1 ${
                                           isSelected
-                                            ? "text-blue-900"
-                                            : "text-gray-900"
+                                            ? "text-blue-700"
+                                            : "text-gray-600"
                                         }`}
                                       >
-                                        {dosage.strength_text}
-                                        {dosage.form && ` (${dosage.form})`}
+                                        {dosage.package_size}
                                       </Text>
-                                      {dosage.package_size && (
-                                        <Text
-                                          className={`text-xs mt-1 ${
-                                            isSelected
-                                              ? "text-blue-700"
-                                              : "text-gray-600"
-                                          }`}
-                                        >
-                                          {dosage.package_size}
-                                        </Text>
-                                      )}
-                                      {isSelected && (
-                                        <View className="mt-2 items-center">
-                                          <View className="bg-blue-500 rounded-full w-5 h-5 items-center justify-center">
-                                            <Text className="text-white text-xs font-bold">
-                                              ✓
-                                            </Text>
-                                          </View>
+                                    )}
+                                    {isSelected && (
+                                      <View className="mt-2 items-center">
+                                        <View className="bg-blue-500 rounded-full w-5 h-5 items-center justify-center">
+                                          <Text className="text-white text-xs font-bold">
+                                            ✓
+                                          </Text>
                                         </View>
-                                      )}
-                                    </View>
-                                  </TouchableOpacity>
-                                );
-                              })}
-                            </View>
-                          </ScrollView>
-                        )}
-                        {selectedEditDosage && (
-                          <Text className="text-xs text-gray-500 mt-1">
-                            Selected: {selectedEditDosage.strength_text}
-                            {selectedEditDosage.form &&
-                              ` (${selectedEditDosage.form})`}
-                            {selectedEditDosage.package_size &&
-                              ` • ${selectedEditDosage.package_size}`}
-                          </Text>
-                        )}
-                      </View>
-
-                      <View className="mb-6">
-                        <Text className="text-sm font-semibold text-gray-700 mb-2">
-                          Notes
+                                      </View>
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </ScrollView>
+                      )}
+                      {selectedEditDosage && (
+                        <Text className="text-xs text-gray-500 mt-1">
+                          Selected: {selectedEditDosage.strength_text}
+                          {selectedEditDosage.form &&
+                            ` (${selectedEditDosage.form})`}
+                          {selectedEditDosage.package_size &&
+                            ` • ${selectedEditDosage.package_size}`}
                         </Text>
-                        <TextInput
-                          value={editNotes}
-                          onChangeText={setEditNotes}
-                          placeholder="Add notes about this medication..."
-                          multiline
-                          numberOfLines={4}
-                          className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
-                          style={{
-                            backgroundColor: "#F9FAFB",
-                            borderColor: "#E5E7EB",
-                            borderRadius: 8,
-                            paddingHorizontal: 16,
-                            paddingVertical: 12,
-                            fontSize: 16,
-                            color: "#111827",
-                            minHeight: 100,
-                            textAlignVertical: "top",
-                          }}
-                        />
-                      </View>
+                      )}
                     </View>
-                  </ScrollView>
-                )}
-              </View>
-            </SafeAreaView>
-          </Modal>
-        </AnimatedTabScreen>
-      </BottomSheet>
+
+                    <View className="mb-6">
+                      <Text className="text-sm font-semibold text-gray-700 mb-2">
+                        Notes
+                      </Text>
+                      <TextInput
+                        value={editNotes}
+                        onChangeText={setEditNotes}
+                        placeholder="Add notes about this medication..."
+                        multiline
+                        numberOfLines={4}
+                        className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
+                        style={{
+                          backgroundColor: "#F9FAFB",
+                          borderColor: "#E5E7EB",
+                          borderRadius: 8,
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          fontSize: 16,
+                          color: "#111827",
+                          minHeight: 100,
+                          textAlignVertical: "top",
+                        }}
+                      />
+                    </View>
+                  </View>
+                </ScrollView>
+              )}
+            </View>
+          </SafeAreaView>
+        </Modal>
+      </AnimatedTabScreen>
 
       {/* Add Medication Modal */}
       <Modal

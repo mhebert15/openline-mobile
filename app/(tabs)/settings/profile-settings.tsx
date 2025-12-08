@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Alert,
   Platform,
   TextInput,
+  Modal,
+  SafeAreaView,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 // @ts-ignore - base64-arraybuffer doesn't have TypeScript definitions
@@ -23,19 +25,9 @@ import {
   ToastTitle,
   ToastDescription,
 } from "@/components/ui/toast";
-import {
-  BottomSheet,
-  BottomSheetPortal,
-  BottomSheetContent,
-  BottomSheetBackdrop,
-  BottomSheetDragIndicator,
-  BottomSheetScrollView,
-  BottomSheetContext,
-} from "@/components/ui/bottomsheet";
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { setOpenEditSheetFn } from "@/lib/utils/edit-sheet-utils";
 
-// Inner component that has access to BottomSheet context
 function ProfileSettingsContent({
   onReady,
 }: {
@@ -52,44 +44,36 @@ function ProfileSettingsContent({
   const [editFullName, setEditFullName] = useState(user?.full_name || "");
   const [editPhone, setEditPhone] = useState(user?.phone || "");
   const [saving, setSaving] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Access BottomSheetContext
-  const bottomSheetContext = useContext(BottomSheetContext) as {
-    handleOpen: () => void;
-    handleClose: () => void;
-  } | null;
+  const handleOpen = () => {
+    setIsEditModalOpen(true);
+  };
 
-  const { handleOpen, handleClose } = bottomSheetContext || {
-    handleOpen: () => {
-      console.warn(
-        "BottomSheet context not available - handleOpen called but context is null"
-      );
-    },
-    handleClose: () => {},
+  const handleClose = () => {
+    setIsEditModalOpen(false);
   };
 
   // Expose open function to parent and global
   useEffect(() => {
-    console.log("Setting handleOpen function:", handleOpen);
     if (onReady) {
       onReady(handleOpen);
     }
     // Also set global function for layout to access
     setOpenEditSheetFn(handleOpen);
-    console.log("handleOpen set in global state");
     return () => {
       setOpenEditSheetFn(null);
     };
-  }, [handleOpen, onReady]);
+  }, [onReady]);
 
-  // Listen for openEdit param to open the bottom sheet
+  // Listen for openEdit param to open the modal
   useFocusEffect(
     React.useCallback(() => {
       if (params.openEdit === "true") {
         handleOpen();
         router.setParams({ openEdit: undefined });
       }
-    }, [params.openEdit, router, handleOpen])
+    }, [params.openEdit, router])
   );
 
   // Also watch for param changes with useEffect (in case screen is already focused)
@@ -98,7 +82,7 @@ function ProfileSettingsContent({
       handleOpen();
       router.setParams({ openEdit: undefined });
     }
-  }, [params.openEdit, router, handleOpen]);
+  }, [params.openEdit, router]);
 
   // Update imageUri when user changes
   useEffect(() => {
@@ -452,13 +436,15 @@ function ProfileSettingsContent({
         </View>
       </ScrollView>
 
-      <BottomSheetPortal
-        snapPoints={["90%"]}
-        backdropComponent={BottomSheetBackdrop}
-        handleComponent={BottomSheetDragIndicator}
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={isEditModalOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleClose}
       >
-        <BottomSheetContent className="flex-1 bg-white">
-          <BottomSheetScrollView className="flex-1">
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#ffffff" }}>
+          <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
             {/* Header */}
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-200">
               <TouchableOpacity onPress={handleClose} className="p-2">
@@ -489,108 +475,108 @@ function ProfileSettingsContent({
             </View>
 
             {/* Profile Image Section */}
-            <View className="items-center py-8">
-              <View className="bg-blue-100 rounded-full w-32 h-32 items-center justify-center overflow-hidden mb-4">
-                {uploading ? (
-                  <ActivityIndicator size="large" color="#0086c9" />
-                ) : imageUri ? (
-                  <Image
-                    source={{ uri: imageUri }}
-                    className="w-32 h-32 rounded-full"
-                    style={{ width: 128, height: 128 }}
-                  />
-                ) : (
-                  <UserIcon size={64} color="#0086c9" />
-                )}
+            <ScrollView className="flex-1">
+              <View className="items-center py-8">
+                <View className="bg-blue-100 rounded-full w-32 h-32 items-center justify-center overflow-hidden mb-4">
+                  {uploading ? (
+                    <ActivityIndicator size="large" color="#0086c9" />
+                  ) : imageUri ? (
+                    <Image
+                      source={{ uri: imageUri }}
+                      className="w-32 h-32 rounded-full"
+                      style={{ width: 128, height: 128 }}
+                    />
+                  ) : (
+                    <UserIcon size={64} color="#0086c9" />
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={pickImage}
+                  disabled={uploading}
+                  className="px-6 py-2 bg-gray-100 rounded-lg"
+                >
+                  <Text className="text-base font-medium text-gray-900">
+                    Edit Photo
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={pickImage}
-                disabled={uploading}
-                className="px-6 py-2 bg-gray-100 rounded-lg"
-              >
-                <Text className="text-base font-medium text-gray-900">
-                  Edit Photo
+
+              {/* Personal Information Section */}
+              <View className="px-4 pb-6">
+                <Text className="text-sm font-semibold text-gray-700 mb-4">
+                  Personal information
                 </Text>
-              </TouchableOpacity>
-            </View>
 
-            {/* Personal Information Section */}
-            <View className="px-4 pb-6">
-              <Text className="text-sm font-semibold text-gray-700 mb-4">
-                Personal information
-              </Text>
+                {/* Full Name Field */}
+                <View className="mb-6">
+                  <Text className="text-sm text-gray-600 mb-2">Full name</Text>
+                  <TextInput
+                    value={editFullName}
+                    onChangeText={setEditFullName}
+                    placeholder="Enter full name"
+                    className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
+                    style={{
+                      backgroundColor: "#F9FAFB",
+                      borderColor: "#E5E7EB",
+                      borderRadius: 8,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      fontSize: 16,
+                      color: "#111827",
+                    }}
+                  />
+                </View>
 
-              {/* Full Name Field */}
-              <View className="mb-6">
-                <Text className="text-sm text-gray-600 mb-2">Full name</Text>
-                <TextInput
-                  value={editFullName}
-                  onChangeText={setEditFullName}
-                  placeholder="Enter full name"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
-                  style={{
-                    backgroundColor: "#F9FAFB",
-                    borderColor: "#E5E7EB",
-                    borderRadius: 8,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: "#111827",
-                  }}
-                />
+                {/* Phone Field */}
+                <View className="mb-6">
+                  <Text className="text-sm text-gray-600 mb-2">Phone</Text>
+                  <TextInput
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    placeholder="Enter phone number"
+                    keyboardType="phone-pad"
+                    className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
+                    style={{
+                      backgroundColor: "#F9FAFB",
+                      borderColor: "#E5E7EB",
+                      borderRadius: 8,
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      fontSize: 16,
+                      color: "#111827",
+                    }}
+                  />
+                </View>
               </View>
-
-              {/* Phone Field */}
-              <View className="mb-6">
-                <Text className="text-sm text-gray-600 mb-2">Phone</Text>
-                <TextInput
-                  value={editPhone}
-                  onChangeText={setEditPhone}
-                  placeholder="Enter phone number"
-                  keyboardType="phone-pad"
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-base text-gray-900"
-                  style={{
-                    backgroundColor: "#F9FAFB",
-                    borderColor: "#E5E7EB",
-                    borderRadius: 8,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    fontSize: 16,
-                    color: "#111827",
-                  }}
-                />
-              </View>
-            </View>
-          </BottomSheetScrollView>
-        </BottomSheetContent>
-      </BottomSheetPortal>
+            </ScrollView>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </>
   );
 }
 
-// Global state to trigger bottom sheet open
-let openEditSheetCallback: (() => void) | null = null;
+// Global state to trigger modal open
+let openEditModalCallback: (() => void) | null = null;
 
 function ProfileSettingsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ openEdit?: string }>();
 
-  // Watch for params and open sheet
+  // Watch for params and open modal
   useEffect(() => {
-    if (params.openEdit === "true" && openEditSheetCallback) {
-      openEditSheetCallback();
+    if (params.openEdit === "true" && openEditModalCallback) {
+      openEditModalCallback();
       router.setParams({ openEdit: undefined });
     }
   }, [params.openEdit, router]);
 
   return (
-    <BottomSheet>
-      <ProfileSettingsContent
-        onReady={(openFn) => {
-          openEditSheetCallback = openFn;
-        }}
-      />
-    </BottomSheet>
+    <ProfileSettingsContent
+      onReady={(openFn) => {
+        openEditModalCallback = openFn;
+      }}
+    />
   );
 }
 

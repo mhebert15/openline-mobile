@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Openline",
-    "slug": "openline-mobile",
+    "slug": "openline",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for quick office check-in.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for voice messages.",
-        "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby medical offices."
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to show nearby medical offices.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "aps-environment": "production",
@@ -73,10 +74,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#ffffff",
-          "sounds": [
-            "./assets/sounds/notification.wav"
-          ]
+          "color": "#ffffff"
         }
       ]
     ],
@@ -91,8 +89,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-project-id-here"
+        "projectId": "7459bf8c-9cef-4558-8e53-04079c9117ab"
       }
-    }
+    },
+    "owner": "mhebert1515"
   }
 }
