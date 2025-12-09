@@ -26,14 +26,14 @@ import type {
   FoodPreferences,
   User,
 } from "@/lib/types/database.types";
-import { mockMeetings, mockOffices } from "@/lib/mock/data";
-
 export default function MeetingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { cache, prefetchTabData, invalidateTab } = useDataCache();
   const { user } = useAuth();
 
+  const [meeting, setMeeting] = useState<Meeting | undefined>(undefined);
+  const [loadingMeeting, setLoadingMeeting] = useState(false);
   const [practitioners, setPractitioners] = useState<Practitioner[]>([]);
   const [foodPreferences, setFoodPreferences] =
     useState<FoodPreferences | null>(null);
@@ -53,13 +53,47 @@ export default function MeetingDetailScreen() {
     return [...dashboardMeetings, ...calendarMeetings];
   }, [cache.dashboard.upcomingMeetings.data, cache.calendar.meetings.data]);
 
-  const meeting: Meeting | undefined = useMemo(() => {
-    if (!id) return undefined;
+  // Fetch meeting from cache first, then from Supabase if not found
+  useEffect(() => {
+    if (!id) {
+      setMeeting(undefined);
+      return;
+    }
+
+    // Check cache first
     const fromCache = meetingsFromCache.find((item) => item.id === id);
     if (fromCache) {
-      return fromCache;
+      setMeeting(fromCache);
+      return;
     }
-    return mockMeetings.find((item) => item.id === id);
+
+    // If not in cache, fetch from Supabase
+    const fetchMeeting = async () => {
+      setLoadingMeeting(true);
+      try {
+        const { data, error } = await supabase
+          .from("meetings")
+          .select(
+            "id, location_id, medical_rep_id, requested_by_profile_id, provider_id, food_preferences_id, meeting_type, title, description, start_at, end_at, status, auto_approved, approved_by_profile_id, approved_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone, image_url)"
+          )
+          .eq("id", id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching meeting:", error);
+          setMeeting(undefined);
+        } else if (data) {
+          setMeeting(data as Meeting);
+        }
+      } catch (error) {
+        console.error("Error fetching meeting:", error);
+        setMeeting(undefined);
+      } finally {
+        setLoadingMeeting(false);
+      }
+    };
+
+    fetchMeeting();
   }, [id, meetingsFromCache]);
 
   const loadLocationData = React.useCallback(
@@ -369,7 +403,7 @@ export default function MeetingDetailScreen() {
     </View>
   );
 
-  if (!meeting) {
+  if (!meeting || loadingMeeting) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
         <ActivityIndicator size="large" color="#0086c9" />

@@ -9,11 +9,16 @@ import {
   Switch,
   Modal,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { addDays, format, parse } from "date-fns";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CalendarIcon, ClockIcon, CheckIcon } from "lucide-react-native";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
@@ -26,7 +31,7 @@ import {
 } from "@/lib/types/database.types";
 
 export default function BookMeetingScreen() {
-  const insets = useSafeAreaInsets();
+  const tabBarHeight = useTabBarHeight();
   const router = useRouter();
   const { user } = useAuth();
   const { cache, prefetchTabData, isLoading, invalidateTab } = useDataCache();
@@ -280,6 +285,34 @@ export default function BookMeetingScreen() {
       locations.find((location) => location.id === selectedLocationId) || null
     );
   }, [locations, selectedLocationId]);
+
+  // Calculate if button should be visible (enabled)
+  const isButtonEnabled = useMemo(() => {
+    return !!(selectedLocation && selectedDate && selectedTime && !booking);
+  }, [selectedLocation, selectedDate, selectedTime, booking]);
+
+  // Animate button position based on enabled state
+  const buttonTranslateY = useSharedValue(100); // Start hidden below screen
+
+  useEffect(() => {
+    if (isButtonEnabled) {
+      // Slide up above tab bar when enabled
+      buttonTranslateY.value = withTiming(0, {
+        duration: 300,
+      });
+    } else {
+      // Slide down below screen when disabled
+      buttonTranslateY.value = withTiming(100, {
+        duration: 300,
+      });
+    }
+  }, [isButtonEnabled, buttonTranslateY]);
+
+  const animatedButtonStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: buttonTranslateY.value }],
+    };
+  });
 
   const userTimeZone = useMemo(() => {
     try {
@@ -1065,36 +1098,6 @@ export default function BookMeetingScreen() {
           </ScrollView>
         </View>
 
-        {/* Existing meetings for this date */}
-        {dayMeetings.length > 0 && (
-          <View className="mb-6 bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-base font-semibold text-gray-900 mb-3">
-              Already Scheduled
-            </Text>
-            {dayMeetings.map((meeting) => {
-              const location = locations.find(
-                (loc) => loc.id === meeting.location_id
-              );
-              return (
-                <View key={meeting.id} className="mb-3 last:mb-0">
-                  <Text className="text-sm font-semibold text-gray-900">
-                    {meeting.location?.name ||
-                      meeting.title ||
-                      location?.name ||
-                      "Meeting"}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <ClockIcon size={14} color="#6b7280" />
-                    <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.start_at), "h:mm a")}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
         {/* Preferred slots */}
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
@@ -1380,53 +1383,25 @@ export default function BookMeetingScreen() {
             </Text>
           )}
         </View>
-
-        {meetings.length > 0 && (
-          <View className="bg-white rounded-2xl p-4 shadow-sm">
-            <Text className="text-base font-semibold text-gray-900 mb-3">
-              Future Meetings
-            </Text>
-            {meetings.slice(0, 3).map((meeting) => {
-              const location = locations.find(
-                (loc) => loc.id === meeting.location_id
-              );
-              return (
-                <View key={meeting.id} className="mb-3 last:mb-0">
-                  <Text className="text-sm font-semibold text-gray-900">
-                    {location?.name || "Medical Office"}
-                  </Text>
-                  <View className="flex-row items-center mt-1">
-                    <CalendarIcon size={14} color="#6b7280" />
-                    <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.start_at), "MMMM d, yyyy")}
-                    </Text>
-                  </View>
-                  <View className="flex-row items-center mt-1">
-                    <ClockIcon size={14} color="#6b7280" />
-                    <Text className="text-xs text-gray-600 ml-2">
-                      {format(new Date(meeting.start_at), "h:mm a")}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
-      <View className="absolute left-0 right-0 bottom-0 bg-white border-t border-gray-200 p-5">
+      <Animated.View
+        className="absolute left-0 right-0 border-t border-gray-200 p-5"
+        style={[
+          {
+            bottom: tabBarHeight - 8, // Position above tab bar
+          },
+          animatedButtonStyle,
+        ]}
+      >
         <TouchableOpacity
-          disabled={
-            !selectedLocation || !selectedDate || !selectedTime || booking
-          }
+          disabled={!isButtonEnabled}
           onPress={handleBookMeeting}
           activeOpacity={0.85}
           className="rounded-xl py-4 items-center"
           style={{
-            backgroundColor:
-              !selectedLocation || !selectedDate || !selectedTime || booking
-                ? "#9ca3af"
-                : "#0086c9",
+            backgroundColor: isButtonEnabled ? "#0086c9" : "#9ca3af",
+            opacity: isButtonEnabled ? 1 : 0,
           }}
         >
           {booking ? (
@@ -1437,7 +1412,7 @@ export default function BookMeetingScreen() {
             </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }

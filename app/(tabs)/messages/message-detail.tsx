@@ -9,12 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { supabase } from "@/lib/supabase/client";
-import type { Message } from "@/lib/types/database.types";
+import type { Message, Profile } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { SendIcon } from "lucide-react-native";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 export default function MessageDetailScreen() {
   const { locationId, participantId } = useLocalSearchParams<{
@@ -24,14 +25,109 @@ export default function MessageDetailScreen() {
     participantName?: string;
   }>();
   const { user } = useAuth();
+  const tabBarHeight = useTabBarHeight();
   const scrollViewRef = useRef<ScrollView>(null);
+  const hasInitiallyScrolledRef = useRef(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState("");
-  const [sending, setSending] = useState(false);
 
   useEffect(() => {
+    // Reset scroll ref when conversation changes
+    hasInitiallyScrolledRef.current = false;
     loadConversation();
+
+    // Set up real-time subscription for new messages
+    if (!user || !locationId) return;
+
+    const isDirectMessage = !!participantId;
+    const channel = supabase
+      .channel(`messages:${locationId}:${participantId || "broadcast"}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `location_id=eq.${locationId}`,
+        },
+        async (payload) => {
+          const newMessage = payload.new as any;
+
+          // Check if message matches current conversation
+          const matchesConversation = isDirectMessage
+            ? newMessage.message_type === "direct" &&
+              ((newMessage.sender_profile_id === user.id &&
+                newMessage.recipient_profile_id === participantId) ||
+                (newMessage.sender_profile_id === participantId &&
+                  newMessage.recipient_profile_id === user.id))
+            : newMessage.message_type === "location_broadcast";
+
+          if (matchesConversation) {
+            // Check if message already exists (to avoid duplicates from optimistic updates)
+            setMessages((prev) => {
+              const exists = prev.some((m) => m.id === newMessage.id);
+              if (exists) {
+                // Message already exists (from optimistic update), skip
+                return prev;
+              } else {
+                // New message from another user, fetch full data with sender/recipient
+                // Fetch the full message with sender/recipient info
+                supabase
+                  .from("messages")
+                  .select(
+                    "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, sender:profiles!messages_sender_profile_id_fkey(id, full_name, email, phone, user_type, status), recipient:profiles!messages_recipient_profile_id_fkey(id, full_name, email, phone, user_type, status)"
+                  )
+                  .eq("id", newMessage.id)
+                  .single()
+                  .then(({ data: fullMessage, error }) => {
+                    if (!error && fullMessage) {
+                      const inserted = fullMessage as any;
+                      const messageToAdd: Message = {
+                        id: inserted.id,
+                        location_id: inserted.location_id,
+                        meeting_id: inserted.meeting_id,
+                        sender_profile_id: inserted.sender_profile_id,
+                        recipient_profile_id: inserted.recipient_profile_id,
+                        body: inserted.body,
+                        sent_at: inserted.sent_at,
+                        message_type: inserted.message_type || "direct",
+                        created_at: inserted.created_at,
+                        updated_at: inserted.updated_at,
+                        sender: inserted.sender
+                          ? (inserted.sender as any)
+                          : undefined,
+                        recipient: inserted.recipient
+                          ? (inserted.recipient as any)
+                          : undefined,
+                      };
+
+                      setMessages((prev) => {
+                        // Check again if message exists (race condition)
+                        if (prev.some((m) => m.id === messageToAdd.id)) {
+                          return prev;
+                        }
+                        return [...prev, messageToAdd];
+                      });
+
+                      // Scroll to bottom when new message arrives
+                      setTimeout(() => {
+                        scrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 100);
+                    }
+                  });
+                // Return previous state while fetching
+                return prev;
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [locationId, participantId, user]);
 
   const loadConversation = async () => {
@@ -130,10 +226,7 @@ export default function MessageDetailScreen() {
         await supabase.from("message_reads").insert(readsToInsert as any);
       }
 
-      // Scroll to bottom after messages load
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: false });
-      }, 100);
+      // Don't scroll here - let onContentSizeChange handle it after layout
     } catch (error) {
       console.error("Error loading conversation:", error);
       setMessages([]);
@@ -156,9 +249,58 @@ export default function MessageDetailScreen() {
       return;
     }
 
-    setSending(true);
+    // Create optimistic message immediately for instant UI feedback
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: tempId,
+      location_id: locationId,
+      meeting_id: null,
+      sender_profile_id: user.id,
+      recipient_profile_id: isDirectMessage ? participantId : null,
+      body: trimmed,
+      sent_at: new Date().toISOString(),
+      message_type: isDirectMessage ? "direct" : "location_broadcast",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      sender: user
+        ? ({
+            id: user.id,
+            full_name: user.full_name || "",
+            email: user.email || "",
+            phone: user.phone || null,
+            user_type: user.user_type || "medical_rep",
+            status: user.status || "active",
+            image_url: null,
+            default_company_id: null,
+            default_location_id: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as Profile)
+        : undefined,
+      recipient: undefined,
+    };
+
+    // Add optimistic message immediately
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setMessageText("");
+
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
+    // Now send to server in the background
     try {
-      // Insert new message into Supabase
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        console.error("No active session found");
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+
       const messageData: any = {
         location_id: locationId,
         sender_profile_id: user.id,
@@ -167,31 +309,57 @@ export default function MessageDetailScreen() {
         message_type: isDirectMessage ? "direct" : "location_broadcast",
       };
 
-      // Only set recipient_profile_id for direct messages
       if (isDirectMessage) {
         messageData.recipient_profile_id = participantId;
       }
 
-      const { error: insertError } = await supabase
+      const { data: insertedData, error: insertError } = await supabase
         .from("messages")
-        .insert(messageData);
+        .insert(messageData)
+        .select(
+          "id, location_id, meeting_id, sender_profile_id, recipient_profile_id, body, sent_at, message_type, created_at, updated_at, sender:profiles!messages_sender_profile_id_fkey(id, full_name, email, phone, user_type, status), recipient:profiles!messages_recipient_profile_id_fkey(id, full_name, email, phone, user_type, status)"
+        )
+        .single();
 
       if (insertError) {
         console.error("Error sending message:", insertError);
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        // Restore message text so user can retry
+        setMessageText(trimmed);
         return;
       }
 
-      setMessageText("");
-      await loadConversation();
+      // Replace optimistic message with real message from server
+      if (insertedData) {
+        const inserted = insertedData as any;
+        const realMessage: Message = {
+          id: inserted.id,
+          location_id: inserted.location_id,
+          meeting_id: inserted.meeting_id,
+          sender_profile_id: inserted.sender_profile_id,
+          recipient_profile_id: inserted.recipient_profile_id,
+          body: inserted.body,
+          sent_at: inserted.sent_at,
+          message_type: inserted.message_type || "direct",
+          created_at: inserted.created_at,
+          updated_at: inserted.updated_at,
+          sender: inserted.sender ? (inserted.sender as any) : undefined,
+          recipient: inserted.recipient
+            ? (inserted.recipient as any)
+            : undefined,
+        };
 
-      // Scroll to bottom after sending
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempId ? realMessage : m))
+        );
+      }
     } catch (error) {
       console.error("Error sending message:", error);
-    } finally {
-      setSending(false);
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      // Restore message text so user can retry
+      setMessageText(trimmed);
     }
   };
 
@@ -228,9 +396,18 @@ export default function MessageDetailScreen() {
       <ScrollView
         ref={scrollViewRef}
         className="flex-1 px-4 py-4"
-        onContentSizeChange={() =>
-          scrollViewRef.current?.scrollToEnd({ animated: true })
-        }
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + 80, // Tab bar height + input area height + padding
+        }}
+        onContentSizeChange={() => {
+          if (!hasInitiallyScrolledRef.current && messages.length > 0) {
+            // Scroll to end immediately without animation once content is laid out
+            requestAnimationFrame(() => {
+              scrollViewRef.current?.scrollToEnd({ animated: false });
+              hasInitiallyScrolledRef.current = true;
+            });
+          }
+        }}
       >
         {messages.length === 0 ? (
           <View className="flex-1 items-center justify-center py-12">
@@ -307,41 +484,37 @@ export default function MessageDetailScreen() {
       </ScrollView>
 
       {/* Message Input */}
-      <View className="bg-white border-t border-gray-200 px-4 py-3">
+      <View
+        className="border-t border-gray-200 px-4 py-3"
+        style={{ paddingBottom: tabBarHeight + 12 }}
+      >
         <View className="flex-row items-center">
           <TextInput
-            className="flex-1 bg-gray-100 rounded-full px-4 py-4 text-gray-900 mr-2"
+            className="flex-1 bg-white rounded-full px-4 py-4 text-gray-900 mr-2"
             placeholder="Type a message..."
             placeholderTextColor="#9ca3af"
             value={messageText}
             onChangeText={setMessageText}
             multiline
             maxLength={500}
-            editable={!sending}
           />
           <TouchableOpacity
             className={`w-10 h-10 rounded-full items-center justify-center ${
-              messageText.trim() && !sending ? "" : "bg-gray-300"
+              messageText.trim() ? "" : "bg-gray-300"
             }`}
             style={
-              messageText.trim() && !sending
-                ? { backgroundColor: "#0086c9" }
-                : undefined
+              messageText.trim() ? { backgroundColor: "#0086c9" } : undefined
             }
             onPress={handleSend}
-            disabled={!messageText.trim() || sending}
+            disabled={!messageText.trim()}
           >
-            {sending ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <View className="items-center justify-center w-full h-full">
-                <SendIcon
-                  size={20}
-                  color="white"
-                  style={{ transform: [{ rotate: "45deg" }], marginLeft: -3 }}
-                />
-              </View>
-            )}
+            <View className="items-center justify-center w-full h-full">
+              <SendIcon
+                size={20}
+                color="white"
+                style={{ transform: [{ rotate: "45deg" }], marginLeft: -3 }}
+              />
+            </View>
           </TouchableOpacity>
         </View>
       </View>

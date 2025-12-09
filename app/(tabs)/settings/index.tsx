@@ -12,7 +12,6 @@ import { useRouter } from "expo-router";
 import {
   UserIcon,
   BellIcon,
-  ShieldIcon,
   HelpCircleIcon,
   LogOutIcon,
   Pill,

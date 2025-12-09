@@ -8,12 +8,11 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { supabase } from "@/lib/supabase/client";
 import type { Message } from "@/lib/types/database.types";
-import { format } from "date-fns";
+import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 import { useComposeSheet } from "@/lib/contexts/ComposeSheetContext";
@@ -22,7 +21,6 @@ import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 function MessagesScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const tabBarHeight = useTabBarHeight();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
@@ -201,6 +199,17 @@ function MessagesScreen() {
       }
     });
 
+    // Ensure mostRecentMessage is actually the most recent by sorting messages in each conversation
+    conversationMap.forEach((conversation) => {
+      // Sort messages by time (newest first) and take the first one
+      const sortedMessages = [...conversation.messages].sort((a, b) => {
+        const aTime = new Date(a.sent_at || a.created_at).getTime();
+        const bTime = new Date(b.sent_at || b.created_at).getTime();
+        return bTime - aTime; // Descending order (newest first)
+      });
+      conversation.mostRecentMessage = sortedMessages[0];
+    });
+
     // Convert map to array and sort by most recent message time (newest first)
     return Array.from(conversationMap.values()).sort((a, b) => {
       const aTime = new Date(
@@ -212,6 +221,41 @@ function MessagesScreen() {
       return bTime - aTime;
     });
   }, [messages, user, messageReads]);
+
+  // Group conversations by date
+  const groupConversationsByDate = (
+    conversations: typeof groupedConversations
+  ): { date: string; conversations: typeof groupedConversations }[] => {
+    const groups: Record<string, typeof groupedConversations> = {};
+
+    conversations.forEach((conversation) => {
+      const date = parseISO(
+        conversation.mostRecentMessage.sent_at ||
+          conversation.mostRecentMessage.created_at
+      );
+      let groupKey: string;
+
+      if (isToday(date)) {
+        groupKey = "Today";
+      } else if (isYesterday(date)) {
+        groupKey = "Yesterday";
+      } else {
+        groupKey = format(date, "MMMM d, yyyy");
+      }
+
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
+      }
+      groups[groupKey].push(conversation);
+    });
+
+    return Object.entries(groups).map(([date, conversations]) => ({
+      date,
+      conversations,
+    }));
+  };
+
+  const groupedByDate = groupConversationsByDate(groupedConversations);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -319,76 +363,84 @@ function MessagesScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            groupedConversations.map((conversation) => {
-              const locationName =
-                conversation.location?.name || "Unknown Location";
-              const participantName =
-                conversation.messageType === "location_broadcast"
-                  ? "Location Broadcast"
-                  : conversation.participant?.full_name || "Unknown";
-              const hasUnread = conversation.unreadCount > 0;
-              const mostRecentTime =
-                conversation.mostRecentMessage.sent_at ||
-                conversation.mostRecentMessage.created_at;
-
-              // For direct messages: show participant name at top, location below
-              // For broadcast messages: show location name at top, "Location Broadcast" below
-              const topName =
-                conversation.messageType === "location_broadcast"
-                  ? locationName
-                  : participantName;
-              const bottomName =
-                conversation.messageType === "location_broadcast"
-                  ? participantName
-                  : locationName;
-
-              return (
-                <TouchableOpacity
-                  key={
-                    conversation.messageType === "location_broadcast"
-                      ? `broadcast_${conversation.locationId}`
-                      : `direct_${conversation.locationId}_${conversation.participantId}`
-                  }
-                  className={`bg-white p-4 shadow-sm border-b border-gray-200 ${
-                    hasUnread ? "border-l-4" : ""
-                  }`}
-                  style={hasUnread ? { borderLeftColor: "#0086c9" } : undefined}
-                  onPress={() => handleConversationPress(conversation)}
-                >
-                  <View className="flex-row justify-between items-start">
-                    <View className="flex-1">
-                      <Text className="text-lg font-semibold text-gray-900">
-                        {topName}
-                      </Text>
-                    </View>
-                    {hasUnread && (
-                      <View className="flex-row items-center">
-                        {conversation.unreadCount > 1 && (
-                          <Text className="text-xs text-white bg-blue-600 rounded-full px-2 py-1 mr-2">
-                            {conversation.unreadCount}
-                          </Text>
-                        )}
-                        <View
-                          className="rounded-full w-2 h-2 mt-2"
-                          style={{ backgroundColor: "#0086c9" }}
-                        />
-                      </View>
-                    )}
-                  </View>
-
-                  <Text className="text-gray-700 mb-2" numberOfLines={2}>
-                    {conversation.mostRecentMessage.body}
+            <View className="p-4">
+              {groupedByDate.map((group) => (
+                <View key={group.date} className="mb-6">
+                  <Text className="text-sm font-semibold text-gray-500 mb-3 px-2">
+                    {group.date}
                   </Text>
+                  {group.conversations.map((conversation) => {
+                    const locationName =
+                      conversation.location?.name || "Unknown Location";
+                    const participantName =
+                      conversation.messageType === "location_broadcast"
+                        ? "Location Broadcast"
+                        : conversation.participant?.full_name || "Unknown";
+                    const hasUnread = conversation.unreadCount > 0;
 
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-sm text-gray-500">{bottomName}</Text>
-                    <Text className="text-sm text-gray-500">
-                      {format(new Date(mostRecentTime), "MMM d, h:mm a")}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
+                    // For direct messages: show participant name at top, location below
+                    // For broadcast messages: show location name at top, "Location Broadcast" below
+                    const topName =
+                      conversation.messageType === "location_broadcast"
+                        ? locationName
+                        : participantName;
+                    const bottomName =
+                      conversation.messageType === "location_broadcast"
+                        ? participantName
+                        : locationName;
+
+                    return (
+                      <TouchableOpacity
+                        key={
+                          conversation.messageType === "location_broadcast"
+                            ? `broadcast_${conversation.locationId}`
+                            : `direct_${conversation.locationId}_${conversation.participantId}`
+                        }
+                        className={`bg-white rounded-lg p-4 mb-2 border ${
+                          hasUnread ? "border-blue-200" : "border-gray-200"
+                        }`}
+                        activeOpacity={0.7}
+                        onPress={() => handleConversationPress(conversation)}
+                      >
+                        <View className="flex-row items-start">
+                          {hasUnread && (
+                            <View className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3" />
+                          )}
+                          <View className="flex-1">
+                            <View className="flex-row items-start justify-between mb-1">
+                              <Text
+                                className={`text-base font-semibold ${
+                                  hasUnread ? "text-gray-900" : "text-gray-700"
+                                }`}
+                                style={{ flex: 1 }}
+                              >
+                                {topName}
+                              </Text>
+                              {hasUnread && conversation.unreadCount > 1 && (
+                                <Text className="text-xs text-white bg-blue-600 rounded-full px-2 py-1 ml-2">
+                                  {conversation.unreadCount}
+                                </Text>
+                              )}
+                            </View>
+                            <Text
+                              className={`text-sm mb-1 ${
+                                hasUnread ? "text-gray-700" : "text-gray-600"
+                              }`}
+                              numberOfLines={2}
+                            >
+                              {conversation.mostRecentMessage.body}
+                            </Text>
+                            <Text className="text-xs text-gray-500">
+                              {bottomName}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
           )}
         </View>
       </ScrollView>

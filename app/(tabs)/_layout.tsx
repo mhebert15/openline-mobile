@@ -1,22 +1,11 @@
-import { useRouter, useSegments } from "expo-router";
 import {
   NativeTabs,
   Icon,
   Label,
   Badge,
 } from "expo-router/unstable-native-tabs";
+import { SendIcon } from "lucide-react-native";
 import {
-  SendIcon,
-  HomeIcon,
-  MessageCircleIcon,
-  SettingsIcon,
-  MapPinIcon,
-  BellIcon,
-} from "lucide-react-native";
-import {
-  Platform,
-  Pressable,
-  type PressableProps,
   Animated,
   Dimensions,
   Modal,
@@ -27,7 +16,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabAnimationProvider } from "@/components/TabAnimationContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { useAuth } from "@/lib/contexts/AuthContext";
@@ -42,64 +30,7 @@ import type {
 } from "@/lib/types/database.types";
 import { ComposeSheetProvider } from "@/lib/contexts/ComposeSheetContext";
 
-const TAB_ROUTE_MAP: Record<string, string> = {
-  dashboard: "/(tabs)/(dashboard)",
-  calendar: "/(tabs)/calendar",
-  locations: "/(tabs)/locations",
-  messages: "/(tabs)/messages",
-  notifications: "/(tabs)/notifications",
-  settings: "/(tabs)/settings",
-};
-
-type TabButtonProps = PressableProps & {
-  tabRouteSegment?: keyof typeof TAB_ROUTE_MAP;
-  accessibilityState?: { selected?: boolean };
-};
-
-const LargeHitTabButton: React.FC<TabButtonProps> = ({
-  tabRouteSegment,
-  accessibilityState,
-  onPress,
-  style,
-  ...rest
-}) => {
-  const router = useRouter();
-  const segments = useSegments();
-
-  const handlePress: PressableProps["onPress"] = (event) => {
-    if (tabRouteSegment && accessibilityState?.selected) {
-      const route = TAB_ROUTE_MAP[tabRouteSegment];
-      if (route) {
-        router.replace(route as any);
-        return;
-      }
-    }
-
-    onPress?.(event);
-  };
-
-  let resolvedStyle: PressableProps["style"];
-  if (typeof style === "function") {
-    resolvedStyle = (state) => [
-      style(state),
-      { paddingHorizontal: 12, paddingVertical: 8 },
-    ];
-  } else {
-    resolvedStyle = [style, { paddingHorizontal: 12, paddingVertical: 8 }];
-  }
-
-  return (
-    <Pressable
-      {...rest}
-      onPress={handlePress}
-      style={resolvedStyle}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    />
-  );
-};
-
 function TabsContent() {
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   // Get unread count from NotificationContext (will be 0 if context not available)
   let unreadCount = 0;
@@ -109,11 +40,6 @@ function TabsContent() {
   } catch {
     // Context not available yet, will be 0
   }
-  const tabBarHeight =
-    Platform.select({
-      ios: 48 + insets.bottom,
-      android: 48,
-    }) ?? 48;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const sheetHeight = Dimensions.get("window").height * 0.9;
@@ -217,14 +143,28 @@ function TabsContent() {
   >([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Fetch available recipients from Supabase
   const fetchAvailableRecipients = async () => {
     if (!user) {
-      setAvailableRecipientsData([]);
+      if (isMountedRef.current) {
+        setAvailableRecipientsData([]);
+      }
       return;
     }
 
-    setLoadingRecipients(true);
+    if (isMountedRef.current) {
+      setLoadingRecipients(true);
+    }
     try {
       // Step 1: Get medical rep's accessible location IDs
       const { data: medicalRep, error: medicalRepError } = await supabase
@@ -236,8 +176,10 @@ function TabsContent() {
 
       if (medicalRepError) {
         console.error("Error fetching medical rep:", medicalRepError);
-        setAvailableRecipientsData([]);
-        setLoadingRecipients(false);
+        if (isMountedRef.current) {
+          setAvailableRecipientsData([]);
+          setLoadingRecipients(false);
+        }
         return;
       }
 
@@ -253,8 +195,10 @@ function TabsContent() {
 
         if (repLocError) {
           console.error("Error fetching medical rep locations:", repLocError);
-          setAvailableRecipientsData([]);
-          setLoadingRecipients(false);
+          if (isMountedRef.current) {
+            setAvailableRecipientsData([]);
+            setLoadingRecipients(false);
+          }
           return;
         }
 
@@ -279,8 +223,10 @@ function TabsContent() {
       }
 
       if (accessibleLocationIds.length === 0) {
-        setAvailableRecipientsData([]);
-        setLoadingRecipients(false);
+        if (isMountedRef.current) {
+          setAvailableRecipientsData([]);
+          setLoadingRecipients(false);
+        }
         return;
       }
 
@@ -389,12 +335,18 @@ function TabsContent() {
         })
       );
 
-      setAvailableRecipientsData(recipientsWithLocations);
+      if (isMountedRef.current) {
+        setAvailableRecipientsData(recipientsWithLocations);
+      }
     } catch (error) {
       console.error("Error fetching available recipients:", error);
-      setAvailableRecipientsData([]);
+      if (isMountedRef.current) {
+        setAvailableRecipientsData([]);
+      }
     } finally {
-      setLoadingRecipients(false);
+      if (isMountedRef.current) {
+        setLoadingRecipients(false);
+      }
     }
   };
 

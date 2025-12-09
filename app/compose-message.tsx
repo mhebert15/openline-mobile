@@ -9,12 +9,14 @@ import {
   Alert,
 } from "react-native";
 import { useRouter, Stack } from "expo-router";
-import { mockMessagesService, mockOfficesService } from "@/lib/mock/services";
+import { supabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/contexts/AuthContext";
 import type { User, MedicalOffice } from "@/lib/types/database.types";
 import { ArrowLeftIcon, CheckIcon } from "lucide-react-native";
 
 export default function ComposeMessageScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [offices, setOffices] = useState<MedicalOffice[]>([]);
   const [adminUsers, setAdminUsers] = useState<User[]>([]);
   const [selectedLocation, setSelectedLocation] =
@@ -27,17 +29,83 @@ export default function ComposeMessageScreen() {
   const [showRecipientPicker, setShowRecipientPicker] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   const loadData = async () => {
+    if (!user) return;
+
     try {
-      const [officesData, adminsData] = await Promise.all([
-        mockOfficesService.getAllOffices(),
-        mockMessagesService.getAdminUsers(),
-      ]);
-      setOffices(officesData);
-      setAdminUsers(adminsData);
+      // Fetch accessible locations
+      let accessibleLocationIds: string[] = [];
+
+      // Get medical rep's accessible location IDs
+      const { data: medicalRep } = await supabase
+        .from("medical_reps")
+        .select("id")
+        .eq("profile_id", user.id)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (medicalRep) {
+        const medicalRepId = (medicalRep as { id: string }).id;
+        const { data: repLocations } = await supabase
+          .from("medical_rep_locations")
+          .select("location_id")
+          .eq("medical_rep_id", medicalRepId)
+          .eq("relationship_status", "active");
+
+        accessibleLocationIds = (repLocations || []).map(
+          (rl: any) => rl.location_id
+        );
+      } else if (user.user_type === "admin") {
+        // Admin can see all locations
+        const { data: allLocations } = await supabase
+          .from("locations")
+          .select("id")
+          .eq("status", "active")
+          .is("deleted_at", null);
+
+        accessibleLocationIds = (allLocations || []).map((loc: any) => loc.id);
+      }
+
+      if (accessibleLocationIds.length === 0) {
+        setOffices([]);
+        setAdminUsers([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch locations
+      const { data: locationsData } = await supabase
+        .from("locations")
+        .select("*")
+        .in("id", accessibleLocationIds)
+        .eq("status", "active")
+        .is("deleted_at", null);
+
+      setOffices((locationsData || []) as MedicalOffice[]);
+
+      // Fetch admin users (location admins and office staff)
+      const { data: staffRoles } = await supabase
+        .from("user_roles")
+        .select(
+          "role, profiles(id, full_name, email, phone, user_type, default_company_id, default_location_id, status, created_at, updated_at)"
+        )
+        .in("location_id", accessibleLocationIds)
+        .in("role", ["location_admin", "office_staff", "scheduler"])
+        .eq("status", "active");
+
+      if (staffRoles && staffRoles.length > 0) {
+        const admins: User[] = staffRoles
+          .filter((role: any) => role.profiles)
+          .map((role: any) => role.profiles as User);
+        setAdminUsers(admins);
+      } else {
+        setAdminUsers([]);
+      }
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -46,18 +114,25 @@ export default function ComposeMessageScreen() {
   };
 
   const handleSend = async () => {
-    if (!selectedRecipient || !selectedLocation || !body.trim()) {
+    if (!selectedRecipient || !selectedLocation || !body.trim() || !user) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     setSending(true);
     try {
-      await mockMessagesService.sendMessage(
-        selectedRecipient.id,
-        selectedLocation.id,
-        body
-      );
+      const { error } = await supabase.from("messages").insert({
+        location_id: selectedLocation.id,
+        sender_profile_id: user.id,
+        recipient_profile_id: selectedRecipient.id,
+        body: body.trim(),
+        sent_at: new Date().toISOString(),
+        message_type: "direct",
+      } as any);
+
+      if (error) {
+        throw error;
+      }
 
       Alert.alert("Success", "Message sent successfully", [
         {

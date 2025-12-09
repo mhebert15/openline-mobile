@@ -7,7 +7,6 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "../supabase/client";
-import { mockMeetingsService, mockOfficesService } from "@/lib/mock/services";
 import type {
   Meeting,
   MedicalOffice,
@@ -376,8 +375,56 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
                 loading: true,
               }));
 
+              // Get user's medical_rep_id if they're a medical rep
+              let medicalRepId: string | null = null;
+              if (user.user_type === "medical_rep") {
+                const { data: medicalRep } = await supabase
+                  .from("medical_reps")
+                  .select("id")
+                  .eq("profile_id", user.id)
+                  .eq("status", "active")
+                  .maybeSingle();
+
+                if (medicalRep && (medicalRep as { id: string }).id) {
+                  medicalRepId = (medicalRep as { id: string }).id;
+                }
+              }
+
+              // Fetch all meetings (not just upcoming) for calendar view
+              let meetingsQuery = supabase
+                .from("meetings")
+                .select(
+                  "id, location_id, medical_rep_id, requested_by_profile_id, provider_id, food_preferences_id, meeting_type, title, description, start_at, end_at, status, auto_approved, approved_by_profile_id, approved_at, created_at, updated_at, locations(id, name, address_line1, address_line2, city, state, postal_code, phone, image_url)"
+                )
+                .in("status", ["pending", "approved"])
+                .order("start_at", { ascending: true });
+
+              // Filter by medical_rep_id if user is a medical rep
+              if (medicalRepId) {
+                meetingsQuery = meetingsQuery.eq(
+                  "medical_rep_id",
+                  medicalRepId
+                );
+              } else if (user.user_type !== "admin") {
+                // If not admin and not medical rep, filter by requested_by_profile_id
+                meetingsQuery = meetingsQuery.eq(
+                  "requested_by_profile_id",
+                  user.id
+                );
+              }
+
+              const { data: meetingsData, error: meetingsError } =
+                await meetingsQuery;
+
+              if (meetingsError) {
+                console.error(
+                  "Error fetching calendar meetings:",
+                  meetingsError
+                );
+              }
+
               const [meetings, locations] = await Promise.all([
-                mockMeetingsService.getUpcomingMeetings(user.id),
+                Promise.resolve((meetingsData || []) as Meeting[]),
                 fetchAccessibleLocations(),
               ]);
 

@@ -17,7 +17,6 @@ import { Notification, NotificationMetadata } from "@/lib/types/database.types";
 function NotificationsScreen() {
   const {
     notifications,
-    unreadCount,
     loading,
     markAsRead,
     refreshNotifications,
@@ -170,9 +169,6 @@ function NotificationsScreen() {
                             style={{ flex: 1 }}
                           >
                             {notification.title}
-                          </Text>
-                          <Text className="text-xs text-gray-500 ml-2">
-                            {formatNotificationDate(notification.created_at)}
                           </Text>
                         </View>
                         <Text
