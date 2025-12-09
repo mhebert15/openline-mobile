@@ -711,7 +711,7 @@ export default function BookMeetingScreen() {
       });
       console.log("=== End Overlap Check Debug ===");
 
-      // Calculate available providers for each slot
+      // Calculate available and unavailable providers for each slot
       allSlots.forEach((slot) => {
         const slotTimeMinutes = parseTimeToMinutes(slot.time);
         const slotEndMinutes = slotTimeMinutes + 60; // All slots are 60 minutes
@@ -719,9 +719,16 @@ export default function BookMeetingScreen() {
         const slotEndTimeStr = formatMinutesToTime(slotEndMinutes);
 
         const availableProviderNames: string[] = [];
+        const allProviderNames: string[] = [];
 
         // Check each provider's availability
         providersList.forEach((provider: any) => {
+          // Format provider name: "First Last, Title"
+          const providerName = `${provider.first_name} ${provider.last_name}${
+            provider.credential ? `, ${provider.credential}` : ""
+          }`;
+          allProviderNames.push(providerName);
+
           // Find availability data for this provider
           const providerAvailability = availabilityData.find(
             (avail: any) => avail.provider_id === provider.id
@@ -742,16 +749,16 @@ export default function BookMeetingScreen() {
               slotEndMinutes > providerStartMinutes;
 
             if (timeOverlaps) {
-              // Format provider name: "First Last, Title"
-              const providerName = `${provider.first_name} ${
-                provider.last_name
-              }${provider.credential ? `, ${provider.credential}` : ""}`;
               availableProviderNames.push(providerName);
             }
           }
         });
 
         slot.availableProviders = availableProviderNames;
+        // Calculate unavailable providers: all providers - available providers
+        slot.unavailableProviders = allProviderNames.filter(
+          (name) => !availableProviderNames.includes(name)
+        );
       });
 
       // Update allDayMeetings state for consistency (even though we used freshMeetings above)
@@ -1106,7 +1113,7 @@ export default function BookMeetingScreen() {
             </Text>
             <View className="flex-row items-center">
               <Text className="text-xs text-gray-600 mr-2">
-                Available providers
+                Unavailable providers
               </Text>
               <Switch
                 value={showProviders}
@@ -1176,9 +1183,9 @@ export default function BookMeetingScreen() {
                         </View>
                         {showProviders && (
                           <View className="mt-2">
-                            {slot.availableProviders &&
-                            slot.availableProviders.length > 0 ? (
-                              slot.availableProviders.map((provider, idx) => (
+                            {slot.unavailableProviders &&
+                            slot.unavailableProviders.length > 0 ? (
+                              slot.unavailableProviders.map((provider, idx) => (
                                 <View
                                   key={idx}
                                   className="flex-row items-center mb-1"
@@ -1188,7 +1195,7 @@ export default function BookMeetingScreen() {
                                     style={{
                                       width: 12,
                                       height: 12,
-                                      backgroundColor: "#10b981",
+                                      backgroundColor: "#ef4444",
                                       alignItems: "center",
                                       justifyContent: "center",
                                     }}
@@ -1219,7 +1226,7 @@ export default function BookMeetingScreen() {
                                   disabled ? "text-gray-400" : "text-gray-500"
                                 }`}
                               >
-                                No providers available
+                                All providers available
                               </Text>
                             )}
                           </View>
@@ -1319,9 +1326,9 @@ export default function BookMeetingScreen() {
                         </View>
                         {showProviders && (
                           <View className="mt-2">
-                            {slot.availableProviders &&
-                            slot.availableProviders.length > 0 ? (
-                              slot.availableProviders.map((provider, idx) => (
+                            {slot.unavailableProviders &&
+                            slot.unavailableProviders.length > 0 ? (
+                              slot.unavailableProviders.map((provider, idx) => (
                                 <View
                                   key={idx}
                                   className="flex-row items-center mb-1"
@@ -1331,7 +1338,7 @@ export default function BookMeetingScreen() {
                                     style={{
                                       width: 12,
                                       height: 12,
-                                      backgroundColor: "#10b981",
+                                      backgroundColor: "#ef4444",
                                       alignItems: "center",
                                       justifyContent: "center",
                                     }}
@@ -1362,7 +1369,7 @@ export default function BookMeetingScreen() {
                                   disabled ? "text-gray-400" : "text-gray-500"
                                 }`}
                               >
-                                No providers available
+                                All providers available
                               </Text>
                             )}
                           </View>

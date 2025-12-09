@@ -411,6 +411,7 @@ export interface UserPushToken {
 }
 
 export interface TimeSlot {
+  unavailableProviders?: string[];
   time: string;
   available: boolean;
   preferred?: boolean;
