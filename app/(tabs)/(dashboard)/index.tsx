@@ -12,6 +12,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import type { Meeting } from "@/lib/types/database.types";
 import { format } from "date-fns";
 import { CalendarIcon, MapPinIcon, ClockIcon } from "lucide-react-native";
@@ -27,6 +28,7 @@ function DashboardScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useTabBarHeight();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
   const toast = useToast();
@@ -179,6 +181,7 @@ function DashboardScreen() {
       }
       contentContainerStyle={{
         paddingTop: insets.top,
+        paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
       }}
     >
       <View className="p-4">

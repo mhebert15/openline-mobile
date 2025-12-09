@@ -10,6 +10,7 @@ import {
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { useRouter } from "expo-router";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { format, isToday, isYesterday, parseISO } from "date-fns";
 import { Notification, NotificationMetadata } from "@/lib/types/database.types";
 
@@ -24,6 +25,7 @@ function NotificationsScreen() {
     hasMore,
   } = useNotifications();
   const router = useRouter();
+  const tabBarHeight = useTabBarHeight();
 
   const handleNotificationPress = useCallback(
     async (notification: Notification) => {
@@ -105,6 +107,9 @@ function NotificationsScreen() {
           onRefresh={refreshNotifications}
         />
       }
+      contentContainerStyle={{
+        paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
+      }}
       onScroll={(event) => {
         const { layoutMeasurement, contentOffset, contentSize } =
           event.nativeEvent;

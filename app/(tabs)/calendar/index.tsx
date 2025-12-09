@@ -15,6 +15,7 @@ import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 import { addDays, addWeeks, format, startOfWeek } from "date-fns";
 
 import { MonthlyCalendar } from "@/components/ui/calendar/MonthlyCalendar";
@@ -37,6 +38,7 @@ function CalendarScreen() {
   const { user } = useAuth();
   const { cache, prefetchTabData, isLoading } = useDataCache();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useTabBarHeight();
   const router = useRouter();
   const [activeDate, setActiveDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>("monthly");
@@ -273,6 +275,9 @@ function CalendarScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
+        }}
       >
         <View>
           {viewMode === "monthly" && (

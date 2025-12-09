@@ -14,10 +14,12 @@ import { MapPinIcon, PhoneIcon, ChevronRightIcon } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 function LocationsScreen() {
   const { cache, prefetchTabData, isLoading } = useDataCache();
   const router = useRouter();
+  const tabBarHeight = useTabBarHeight();
   const placeholderImage = require("../../../assets/images/placeholder_location.png");
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
@@ -85,7 +87,12 @@ function LocationsScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
+        }}
+      >
         <View className="p-4">
           {locations.map((location) => {
             const hasImage = Boolean(

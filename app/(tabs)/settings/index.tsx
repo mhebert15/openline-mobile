@@ -18,10 +18,12 @@ import {
   Pill,
 } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 function SettingsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const tabBarHeight = useTabBarHeight();
 
   const handleSignOut = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -38,7 +40,12 @@ function SettingsScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <ScrollView
+      className="flex-1 bg-gray-50"
+      contentContainerStyle={{
+        paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
+      }}
+    >
       {/* User Profile Section */}
       <View className="bg-white p-6 mb-2">
         <View className="items-center">

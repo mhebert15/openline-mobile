@@ -1,12 +1,17 @@
-import { Tabs, useRouter, useSegments } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import {
+  NativeTabs,
+  Icon,
+  Label,
+  Badge,
+} from "expo-router/unstable-native-tabs";
+import {
+  SendIcon,
   HomeIcon,
-  CalendarIcon,
   MessageCircleIcon,
   SettingsIcon,
   MapPinIcon,
   BellIcon,
-  SendIcon,
 } from "lucide-react-native";
 import {
   Platform,
@@ -113,6 +118,95 @@ function TabsContent() {
   const sheetTranslateY = useRef(new Animated.Value(0)).current;
   const sheetHeight = Dimensions.get("window").height * 0.9;
   const { cache, prefetchTabData } = useDataCache();
+
+  // Track unread message count
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [messageReads, setMessageReads] = useState<Set<string>>(new Set());
+
+  // Fetch unread message count from Supabase
+  useEffect(() => {
+    if (!user) {
+      setUnreadMessageCount(0);
+      setMessageReads(new Set());
+      return;
+    }
+
+    const fetchUnreadCount = async () => {
+      try {
+        // Get all messages for the current user
+        const messages = (cache.messages.messages.data as any[]) || [];
+        if (messages.length === 0) {
+          setUnreadMessageCount(0);
+          return;
+        }
+
+        const messageIds = messages.map((msg) => msg.id);
+        if (messageIds.length === 0) {
+          setUnreadMessageCount(0);
+          return;
+        }
+
+        // Fetch read status for all messages
+        const { data: readsData } = await supabase
+          .from("message_reads")
+          .select("message_id")
+          .eq("profile_id", user.id)
+          .in("message_id", messageIds);
+
+        const readSet = new Set(
+          (readsData || []).map((read: any) => read.message_id)
+        );
+        setMessageReads(readSet);
+
+        // Count unread messages (not sent by current user, not in messageReads)
+        const unreadCount = messages.filter(
+          (msg) => msg.sender_profile_id !== user.id && !readSet.has(msg.id)
+        ).length;
+
+        setUnreadMessageCount(unreadCount);
+      } catch (error) {
+        console.error("Error fetching unread message count:", error);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Subscribe to real-time updates for messages and message_reads
+    const messagesChannel = supabase
+      .channel(`messages:${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `recipient_profile_id=eq.${user.id}`,
+        },
+        () => {
+          // Refetch when messages change
+          fetchUnreadCount();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_reads",
+          filter: `profile_id=eq.${user.id}`,
+        },
+        () => {
+          // Refetch when read status changes
+          fetchUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(messagesChannel);
+    };
+  }, [user, cache.messages.messages.data]);
+
   const [showComposeSheet, setShowComposeSheet] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState<User | null>(null);
@@ -455,7 +549,6 @@ function TabsContent() {
     hasPrefetchedRef.current = true;
     const tabsToPrefetch: Parameters<typeof prefetchTabData>[0][] = [
       "dashboard",
-      "calendar",
       "locations",
       "messages",
     ];
@@ -470,150 +563,63 @@ function TabsContent() {
   return (
     <ComposeSheetProvider value={{ openComposeSheet }}>
       <View className="flex-1">
-        <Tabs
-          screenOptions={{
-            tabBarActiveTintColor: "#0086c9",
-            tabBarInactiveTintColor: "#6b7280",
-            tabBarStyle: {
-              backgroundColor: "#ffffff",
-              borderTopColor: "#e5e7eb",
-              borderTopWidth: 1,
-              height: tabBarHeight,
-              paddingBottom: Platform.select({
-                ios: insets.bottom > 0 ? insets.bottom : 4,
-                android: 4,
-              }),
-              paddingTop: 8,
-              paddingHorizontal: 24,
-              paddingVertical: 0,
-              justifyContent: "space-around",
-              flexDirection: "row",
-            },
-            tabBarShowLabel: false, // Hide labels since we're icon-only
-            tabBarIconStyle: {
-              marginTop: 0,
-            },
-            tabBarItemStyle: {
-              flex: 1,
-              minWidth: 0,
-              justifyContent: "center",
-              alignItems: "center",
-            },
-            headerStyle: {
-              backgroundColor: "#ffffff",
-            },
-            headerTintColor: "#111827",
-            headerTitleStyle: {
-              fontWeight: "600",
-            },
-          }}
-        >
-          <Tabs.Screen
-            name="(dashboard)"
-            options={{
-              title: "",
-              headerShown: false,
-              tabBarButton: (props) => (
-                <LargeHitTabButton {...props} tabRouteSegment="dashboard" />
-              ),
-              tabBarIcon: ({ color, size }) => (
-                <HomeIcon color={color} size={size} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="calendar"
-            options={{
-              title: "",
-              headerShown: false,
-              // Temporarily hide calendar from the tab bar
-              href: null,
-              tabBarIcon: ({ color, size }) => (
-                <CalendarIcon color={color} size={size} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="locations"
-            options={{
-              title: "",
-              headerShown: false, // Hide tab header - Stack navigator handles it
-              tabBarButton: (props) => (
-                <LargeHitTabButton {...props} tabRouteSegment="locations" />
-              ),
-              tabBarIcon: ({ color, size }) => (
-                <MapPinIcon color={color} size={size} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="messages"
-            options={{
-              title: "",
-              headerShown: false, // Hide tab header - Stack navigator handles it
-              tabBarButton: (props) => (
-                <LargeHitTabButton {...props} tabRouteSegment="messages" />
-              ),
-              tabBarIcon: ({ color, size }) => (
-                <MessageCircleIcon color={color} size={size} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="notifications"
-            options={{
-              title: "",
-              headerShown: false,
-              tabBarButton: (props) => (
-                <LargeHitTabButton {...props} tabRouteSegment="notifications" />
-              ),
-              tabBarIcon: ({ color, size }) => (
-                <View style={{ position: "relative" }}>
-                  <BellIcon color={color} size={size} />
-                  {unreadCount > 0 && (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: -4,
-                        right: -4,
-                        backgroundColor: "#ef4444",
-                        borderRadius: 10,
-                        minWidth: 20,
-                        height: 20,
-                        paddingHorizontal: 6,
-                        justifyContent: "center",
-                        alignItems: "center",
-                        borderWidth: 2,
-                        borderColor: "#ffffff",
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: "#ffffff",
-                          fontSize: 11,
-                          fontWeight: "600",
-                        }}
-                      >
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="settings"
-            options={{
-              title: "",
-              headerShown: false,
-              tabBarButton: (props) => <LargeHitTabButton {...props} />,
-              tabBarIcon: ({ color, size }) => (
-                <SettingsIcon color={color} size={size} />
-              ),
-            }}
-          />
-        </Tabs>
+        <NativeTabs>
+          <NativeTabs.Trigger name="(dashboard)">
+            <Label hidden={true}>Home</Label>
+            <Icon
+              src={{
+                default: require("@/assets/icons/home-default.png"),
+                selected: require("@/assets/icons/home-selected.png"),
+              }}
+            />
+          </NativeTabs.Trigger>
+          <NativeTabs.Trigger name="locations">
+            <Label hidden={true}>Locations</Label>
+            <Icon
+              src={{
+                default: require("@/assets/icons/locations-default.png"),
+                selected: require("@/assets/icons/locations-selected.png"),
+              }}
+            />
+          </NativeTabs.Trigger>
+          <NativeTabs.Trigger name="messages">
+            <Label hidden={true}>Messages</Label>
+            <Icon
+              src={{
+                default: require("@/assets/icons/messages-default.png"),
+                selected: require("@/assets/icons/messages-selected.png"),
+              }}
+            />
+            {unreadMessageCount > 0 && (
+              <Badge>
+                {unreadMessageCount > 99
+                  ? "99+"
+                  : unreadMessageCount.toString()}
+              </Badge>
+            )}
+          </NativeTabs.Trigger>
+          <NativeTabs.Trigger name="notifications">
+            <Label hidden={true}>Notifications</Label>
+            <Icon
+              src={{
+                default: require("@/assets/icons/notifications-default.png"),
+                selected: require("@/assets/icons/notifications-selected.png"),
+              }}
+            />
+            {unreadCount > 0 && (
+              <Badge>{unreadCount > 99 ? "99+" : unreadCount.toString()}</Badge>
+            )}
+          </NativeTabs.Trigger>
+          <NativeTabs.Trigger name="settings">
+            <Label hidden={true}>Settings</Label>
+            <Icon
+              src={{
+                default: require("@/assets/icons/settings-default.png"),
+                selected: require("@/assets/icons/settings-selected.png"),
+              }}
+            />
+          </NativeTabs.Trigger>
+        </NativeTabs>
       </View>
 
       <Modal

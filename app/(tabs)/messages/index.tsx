@@ -8,6 +8,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/lib/contexts/AuthContext";
 import { useDataCache } from "@/lib/contexts/DataCacheContext";
 import { supabase } from "@/lib/supabase/client";
@@ -16,16 +17,22 @@ import { format } from "date-fns";
 import { MessageCircleIcon, PlusIcon } from "lucide-react-native";
 import { AnimatedTabScreen } from "@/components/AnimatedTabScreen";
 import { useComposeSheet } from "@/lib/contexts/ComposeSheetContext";
+import { useTabBarHeight } from "@/hooks/useTabBarHeight";
 
 function MessagesScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useTabBarHeight();
   const { cache, prefetchTabData, invalidateTab, isLoading } = useDataCache();
   const [refreshing, setRefreshing] = useState(false);
   const { openComposeSheet } = useComposeSheet();
 
-  // Get data from cache
-  const messages = (cache.messages.messages.data as Message[]) || [];
+  // Get data from cache - memoize to prevent infinite loops
+  const messages = useMemo(
+    () => (cache.messages.messages.data as Message[]) || [],
+    [cache.messages.messages.data]
+  );
 
   // Only show loader if cache is empty AND currently loading
   const loading = isLoading("messages") && messages.length === 0;
@@ -54,7 +61,11 @@ function MessagesScreen() {
 
   useEffect(() => {
     if (!user || messages.length === 0) {
-      setMessageReads(new Set());
+      setMessageReads((prev) => {
+        // Only update if the Set is not already empty
+        if (prev.size === 0) return prev;
+        return new Set();
+      });
       return;
     }
 
@@ -71,7 +82,16 @@ function MessagesScreen() {
       const readSet = new Set(
         (readsData || []).map((read: any) => read.message_id)
       );
-      setMessageReads(readSet);
+      setMessageReads((prev) => {
+        // Only update if the Set actually changed
+        if (
+          prev.size === readSet.size &&
+          Array.from(prev).every((id) => readSet.has(id))
+        ) {
+          return prev;
+        }
+        return readSet;
+      });
     };
 
     fetchReadStatus();
@@ -281,6 +301,9 @@ function MessagesScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        contentContainerStyle={{
+          paddingBottom: tabBarHeight + 16, // Tab bar height + extra padding
+        }}
       >
         <View>
           {groupedConversations.length === 0 ? (
@@ -370,10 +393,13 @@ function MessagesScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - positioned above tab bar */}
       <TouchableOpacity
-        className="absolute bottom-6 right-6 rounded-full w-14 h-14 items-center justify-center shadow-lg"
-        style={{ backgroundColor: "#0086c9" }}
+        className="absolute right-6 rounded-full w-14 h-14 items-center justify-center shadow-lg"
+        style={{
+          backgroundColor: "#0086c9",
+          bottom: tabBarHeight + 16, // Position above tab bar with padding
+        }}
         onPress={openComposeSheet}
       >
         <PlusIcon size={28} color="white" />
